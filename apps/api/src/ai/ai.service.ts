@@ -121,11 +121,7 @@ export class AiService {
       'width',
       'l\\b',
     ]);
-    const heightMm = this.parseDimension(prompt, [
-      'altura',
-      'height',
-      'h\\b',
-    ]);
+    const heightMm = this.parseDimension(prompt, ['altura', 'height', 'h\\b']);
     const depthMm = this.parseDimension(prompt, [
       'profundidade',
       'prof',
@@ -159,7 +155,9 @@ export class AiService {
     };
   }
 
-  private engineeringDecisions(request: ParsedRequest): AiEngineeringDecision[] {
+  private engineeringDecisions(
+    request: ParsedRequest,
+  ): AiEngineeringDecision[] {
     const decisions: AiEngineeringDecision[] = [];
     const maxSpan = request.widthMm / Math.max(request.doorCount, 1);
 
@@ -167,42 +165,48 @@ export class AiService {
       decisions.push({
         code: 'TOP_THICKNESS_36',
         title: 'Reforço estrutural de tampo',
-        detail: 'Largura elevada detectada, recomendado tampo/painéis críticos em 36mm.',
+        detail:
+          'Largura elevada detectada, recomendado tampo/painéis críticos em 36mm.',
       });
     }
     if (maxSpan >= 900) {
       decisions.push({
         code: 'SHELF_REINFORCEMENT',
         title: 'Reforço para vãos longos',
-        detail: 'Vão de prateleira acima do recomendado, inserido reforço longitudinal.',
+        detail:
+          'Vão de prateleira acima do recomendado, inserido reforço longitudinal.',
       });
     }
     if (request.heightMm >= 2400) {
       decisions.push({
         code: 'HIGH_WARDROBE_BRACING',
         title: 'Travamento para altura elevada',
-        detail: 'Altura elevada, adicionados travamentos para estabilidade de montagem.',
+        detail:
+          'Altura elevada, adicionados travamentos para estabilidade de montagem.',
       });
     }
     if (request.drawerCount >= 6) {
       decisions.push({
         code: 'DRAWER_SLIDE_REINFORCED',
         title: 'Corrediças reforçadas',
-        detail: 'Quantidade/largura de gavetas exige corrediças telescópicas reforçadas.',
+        detail:
+          'Quantidade/largura de gavetas exige corrediças telescópicas reforçadas.',
       });
     }
     if (request.doorCount >= 3) {
       decisions.push({
         code: 'DOOR_HARDWARE_PLUS',
         title: 'Ferragens adicionais de porta',
-        detail: 'Configuração com múltiplas portas, aumentando ferragens de apoio e alinhamento.',
+        detail:
+          'Configuração com múltiplas portas, aumentando ferragens de apoio e alinhamento.',
       });
     }
     if (decisions.length === 0) {
       decisions.push({
         code: 'STANDARD_ENGINEERING',
         title: 'Engenharia padrão aplicada',
-        detail: 'Projeto dentro da faixa padrão com regras de folga, espessura e montagem.',
+        detail:
+          'Projeto dentro da faixa padrão com regras de folga, espessura e montagem.',
       });
     }
     return decisions;
@@ -212,9 +216,17 @@ export class AiService {
     const innerWidth = Math.max(200, request.widthMm - panelThicknessMm * 2);
     const innerHeight = Math.max(200, request.heightMm - panelThicknessMm * 2);
     const shelfCount = Math.max(2, Math.ceil(request.heightMm / 700));
-    const doorWidth = Math.max(260, Math.floor(innerWidth / Math.max(request.doorCount, 1)));
+    const doorWidth = Math.max(
+      260,
+      Math.floor(innerWidth / Math.max(request.doorCount, 1)),
+    );
     const drawerFrontHeight = request.drawerCount
-      ? Math.max(120, Math.floor(Math.min(request.heightMm * 0.35, 900) / request.drawerCount))
+      ? Math.max(
+          120,
+          Math.floor(
+            Math.min(request.heightMm * 0.35, 900) / request.drawerCount,
+          ),
+        )
       : 0;
 
     const specs: Array<{
@@ -288,7 +300,10 @@ export class AiService {
         name: 'Porta',
         type: 'DOOR',
         widthMm: doorWidth,
-        heightMm: Math.max(400, innerHeight - drawerFrontHeight * request.drawerCount),
+        heightMm: Math.max(
+          400,
+          innerHeight - drawerFrontHeight * request.drawerCount,
+        ),
         thicknessMm: panelThicknessMm,
         quantity: request.doorCount,
         notes: 'Aplicar folga perimetral de 2mm por lado.',
@@ -327,13 +342,22 @@ export class AiService {
     const materialCost = totalSheets * Math.max(1, materialPricePerSheet);
     const laborHours = Math.max(
       6,
-      Math.round(request.widthMm / 220 + request.heightMm / 420 + request.drawerCount * 0.6),
+      Math.round(
+        request.widthMm / 220 +
+          request.heightMm / 420 +
+          request.drawerCount * 0.6,
+      ),
     );
     const laborCost = laborHours * 85;
     const installationCost = Math.max(260, request.widthMm * 0.35);
     const transportCost = Math.max(140, request.widthMm * 0.18);
     const marginPercent = 28;
-    const subtotal = materialCost + hardwareCost + laborCost + installationCost + transportCost;
+    const subtotal =
+      materialCost +
+      hardwareCost +
+      laborCost +
+      installationCost +
+      transportCost;
     const finalPrice = subtotal * (1 + marginPercent / 100);
 
     return {
@@ -351,7 +375,10 @@ export class AiService {
     const suggestedSheetWidthMm = 2750;
     const suggestedSheetHeightMm = 1830;
     const sheetAreaMm2 = suggestedSheetWidthMm * suggestedSheetHeightMm;
-    const totalSheets = Math.max(1, Math.ceil((partAreaMm2 * 1.15) / sheetAreaMm2));
+    const totalSheets = Math.max(
+      1,
+      Math.ceil((partAreaMm2 * 1.15) / sheetAreaMm2),
+    );
     const utilizationPercent = Math.min(
       96,
       (partAreaMm2 / (totalSheets * sheetAreaMm2)) * 100,
@@ -427,13 +454,19 @@ export class AiService {
       const hingeHardware = await this.prisma.hardware.findFirst({
         where: {
           workspaceId: workspace.id,
-          OR: [{ type: { contains: 'dobradi', mode: 'insensitive' } }, { name: { contains: 'dobradi', mode: 'insensitive' } }],
+          OR: [
+            { type: { contains: 'dobradi', mode: 'insensitive' } },
+            { name: { contains: 'dobradi', mode: 'insensitive' } },
+          ],
         },
       });
       const drawerHardware = await this.prisma.hardware.findFirst({
         where: {
           workspaceId: workspace.id,
-          OR: [{ type: { contains: 'corredi', mode: 'insensitive' } }, { name: { contains: 'corredi', mode: 'insensitive' } }],
+          OR: [
+            { type: { contains: 'corredi', mode: 'insensitive' } },
+            { name: { contains: 'corredi', mode: 'insensitive' } },
+          ],
         },
       });
 
@@ -574,7 +607,9 @@ export class AiService {
             createdById: userId,
             body: [
               'Decisões técnicas da IA:',
-              ...decisions.map((item) => `- [${item.code}] ${item.title}: ${item.detail}`),
+              ...decisions.map(
+                (item) => `- [${item.code}] ${item.title}: ${item.detail}`,
+              ),
             ].join('\n'),
           },
         });

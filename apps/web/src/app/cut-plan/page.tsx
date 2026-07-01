@@ -8,7 +8,7 @@ import { CutPiece, CutSettings, optimizeCutPlan } from '@/lib/cut-optimization';
 import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 
 type Material = {
   id: string;
@@ -46,7 +46,7 @@ const CARD_COLORS = [
   '#facc15',
 ];
 
-export default function CutPlanPage() {
+function CutPlanPageContent() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('projectId') ?? '';
   const token = useAuthStore((state) => state.token);
@@ -60,37 +60,30 @@ export default function CutPlanPage() {
     enabled: !!token,
   });
   const projectQuery = useProject(token, projectId);
-
-  useEffect(() => {
+  const generatedPieces = useMemo(() => {
     if (!projectQuery.data) {
-      return;
+      return [] as CutPiece[];
     }
     const parts = projectQuery.data.spaces.flatMap((space) =>
       space.units.flatMap((unit) => unit.modules.flatMap((module) => module.parts)),
     );
-    const generatedPieces = parts.map((part) => ({
+    return parts.map((part) => ({
       label: part.name,
       widthMm: part.widthMm,
       heightMm: part.heightMm,
       qty: part.quantity,
     }));
-    if (generatedPieces.length > 0) {
-      setPieces(generatedPieces);
-    }
-    const firstMaterial = parts.find((part) => part.material?.id)?.material;
-    if (firstMaterial?.id) {
-      setSelectedMaterialId(firstMaterial.id);
-      setSettings((current) => ({
-        ...current,
-        sheetWidthMm: firstMaterial.sheetWidthMm ?? current.sheetWidthMm,
-        sheetHeightMm: firstMaterial.sheetHeightMm ?? current.sheetHeightMm,
-      }));
-    }
   }, [projectQuery.data]);
+  const currentPieces = generatedPieces.length > 0 ? generatedPieces : pieces;
+  const projectMaterialId =
+    projectQuery.data?.spaces
+      .flatMap((space) => space.units.flatMap((unit) => unit.modules.flatMap((module) => module.parts)))
+      .find((part) => part.material?.id)?.material?.id ?? '';
+  const effectiveSelectedMaterialId = selectedMaterialId || projectMaterialId;
 
-  const selectedMaterial = materialsQuery.data?.find((material) => material.id === selectedMaterialId);
+  const selectedMaterial = materialsQuery.data?.find((material) => material.id === effectiveSelectedMaterialId);
 
-  const optimization = useMemo(() => optimizeCutPlan(pieces, settings), [pieces, settings]);
+  const optimization = useMemo(() => optimizeCutPlan(currentPieces, settings), [currentPieces, settings]);
 
   const totalMaterialCost = selectedMaterial
     ? optimization.totalSheets * selectedMaterial.pricePerSheet
@@ -182,8 +175,9 @@ export default function CutPlanPage() {
               <span className="mb-1 block text-xs text-zinc-400">Material MDF</span>
               <select
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3"
-                value={selectedMaterialId}
+                value={effectiveSelectedMaterialId}
                 onChange={(event) => setSelectedMaterialId(event.target.value)}
+                 disabled={generatedPieces.length > 0}
               >
                 <option value="">Selecione o material</option>
                 {materialsQuery.data?.map((material) => (
@@ -254,6 +248,7 @@ export default function CutPlanPage() {
           <button
             className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-950"
             onClick={addPiece}
+            disabled={generatedPieces.length > 0}
           >
             + Peça
           </button>
@@ -271,13 +266,14 @@ export default function CutPlanPage() {
             </tr>
           </thead>
           <tbody>
-            {pieces.map((piece, index) => (
+            {currentPieces.map((piece, index) => (
               <tr key={`${piece.label}-${index}`} className="border-t border-zinc-800">
                 <td className="px-4 py-2">
                   <input
                     className="w-full rounded-lg bg-zinc-950 px-3 py-2"
                     value={piece.label}
                     onChange={(event) => updatePiece(index, 'label', event.target.value)}
+                    disabled={generatedPieces.length > 0}
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -287,6 +283,7 @@ export default function CutPlanPage() {
                     min={1}
                     value={piece.widthMm}
                     onChange={(event) => updatePiece(index, 'widthMm', event.target.value)}
+                    disabled={generatedPieces.length > 0}
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -296,6 +293,7 @@ export default function CutPlanPage() {
                     min={1}
                     value={piece.heightMm}
                     onChange={(event) => updatePiece(index, 'heightMm', event.target.value)}
+                    disabled={generatedPieces.length > 0}
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -305,13 +303,14 @@ export default function CutPlanPage() {
                     min={1}
                     value={piece.qty}
                     onChange={(event) => updatePiece(index, 'qty', event.target.value)}
+                    disabled={generatedPieces.length > 0}
                   />
                 </td>
                 <td className="px-4 py-2 text-zinc-400">
                   {((piece.widthMm * piece.heightMm * piece.qty) / 1_000_000).toFixed(3)} m²
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <button className="text-red-400 hover:text-red-300" onClick={() => removePiece(index)}>
+                  <button className="text-red-400 hover:text-red-300 disabled:opacity-50" onClick={() => removePiece(index)} disabled={generatedPieces.length > 0}>
                     Remover
                   </button>
                 </td>
@@ -406,5 +405,13 @@ export default function CutPlanPage() {
         ) : null}
       </section>
     </AppShell>
+  );
+}
+
+export default function CutPlanPage() {
+  return (
+    <Suspense fallback={<AppShell><p className="text-sm text-zinc-400">Carregando plano de corte...</p></AppShell>}>
+      <CutPlanPageContent />
+    </Suspense>
   );
 }

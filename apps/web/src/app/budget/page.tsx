@@ -7,7 +7,7 @@ import { buildQuotePdf, QuoteItem } from '@/lib/quote-pdf';
 import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 
 type Material = { id: string; name: string; thicknessMm: number; pricePerSheet: number };
 type Hardware = { id: string; name: string; type: string; unitCost: number };
@@ -34,7 +34,7 @@ function formatCurrency(value: number) {
   return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export default function BudgetPage() {
+function BudgetPageContent() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('projectId') ?? '';
   const token = useAuthStore((state) => state.token);
@@ -56,15 +56,12 @@ export default function BudgetPage() {
     enabled: !!token,
   });
   const projectQuery = useProject(token, projectId);
-
-  useEffect(() => {
+  const generatedItems = useMemo(() => {
     if (!projectQuery.data) {
-      return;
+      return [] as BudgetItem[];
     }
     const project = projectQuery.data;
-    setProjectName(project.name);
-    const generatedItems: BudgetItem[] = [];
-
+    const result: BudgetItem[] = [];
     const materialGroups = new Map<string, { qty: number; unitCost: number }>();
     const hardwareGroups = new Map<string, { qty: number; unitCost: number }>();
     const parts = project.spaces.flatMap((space) =>
@@ -93,7 +90,7 @@ export default function BudgetPage() {
     }
 
     for (const [name, item] of materialGroups.entries()) {
-      generatedItems.push({
+      result.push({
         description: `${name} — chapas`,
         category: 'material',
         qty: item.qty,
@@ -101,39 +98,40 @@ export default function BudgetPage() {
       });
     }
     for (const [name, item] of hardwareGroups.entries()) {
-      generatedItems.push({
+      result.push({
         description: name,
         category: 'hardware',
         qty: item.qty,
         unitCost: item.unitCost,
       });
     }
-    generatedItems.push({
+    result.push({
       description: 'Engenharia, corte, usinagem e montagem',
       category: 'labor',
       qty: 1,
       unitCost: Math.max(1200, parts.length * 85),
     });
-    generatedItems.push({
+    result.push({
       description: 'Instalação e logística',
       category: 'other',
       qty: 1,
       unitCost: Math.max(450, project.widthMm * 0.5),
     });
-
-    setItems(generatedItems.length > 0 ? generatedItems : INITIAL_ITEMS);
+    return result;
   }, [projectQuery.data]);
+  const currentItems = generatedItems.length > 0 ? generatedItems : items;
+  const effectiveProjectName = projectQuery.data?.name ?? projectName;
 
   const totalsByCategory = useMemo(
     () =>
-      items.reduce<Record<BudgetItem['category'], number>>(
+      currentItems.reduce<Record<BudgetItem['category'], number>>(
         (accumulator, item) => {
           accumulator[item.category] += item.qty * item.unitCost;
           return accumulator;
         },
         { material: 0, hardware: 0, labor: 0, other: 0 },
       ),
-    [items],
+    [currentItems],
   );
 
   const subtotal = Object.values(totalsByCategory).reduce((sum, value) => sum + value, 0);
@@ -172,16 +170,16 @@ export default function BudgetPage() {
     try {
       const pdfBytes = await buildQuotePdf({
         clientName,
-        projectName,
+        projectName: effectiveProjectName,
         marginPercent,
-        items,
+        items: currentItems,
       });
       const pdfBuffer = Uint8Array.from(pdfBytes).buffer;
       const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `nexus-quote-${projectName.toLowerCase().replaceAll(/\s+/g, '-') || 'projeto'}.pdf`;
+      anchor.download = `nexus-quote-${effectiveProjectName.toLowerCase().replaceAll(/\s+/g, '-') || 'projeto'}.pdf`;
       anchor.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -200,7 +198,7 @@ export default function BudgetPage() {
         </div>
         <button
           className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
-          disabled={items.length === 0 || isExporting}
+          disabled={currentItems.length === 0 || isExporting}
           onClick={exportPdf}
         >
           {isExporting ? 'Gerando PDF...' : 'Exportar cotação em PDF'}
@@ -223,8 +221,9 @@ export default function BudgetPage() {
               <span className="mb-1 block text-xs text-zinc-400">Projeto</span>
               <input
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3"
-                value={projectName}
+                value={effectiveProjectName}
                 onChange={(event) => setProjectName(event.target.value)}
+                disabled={!!projectQuery.data}
               />
             </label>
             <label className="text-sm">
@@ -275,7 +274,7 @@ export default function BudgetPage() {
           <div>
             <h2 className="font-medium">Itens da cotação</h2>
             <p className="text-xs text-zinc-500">
-              Materiais, ferragens e mão de obra consolidados para {projectName}.
+              Materiais, ferragens e mão de obra consolidados para {effectiveProjectName}.
             </p>
           </div>
           <button
@@ -298,13 +297,14 @@ export default function BudgetPage() {
             </tr>
           </thead>
           <tbody>
-            {items.map((item, index) => (
+            {currentItems.map((item, index) => (
               <tr key={`${item.description}-${index}`} className="border-t border-zinc-800">
                 <td className="px-4 py-2">
                   <input
                     className="w-full rounded-lg bg-zinc-950 px-3 py-2"
                     value={item.description}
                     onChange={(event) => updateItem(index, 'description', event.target.value)}
+                    disabled={!!projectQuery.data}
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -312,6 +312,7 @@ export default function BudgetPage() {
                     className="rounded-lg bg-zinc-950 px-3 py-2"
                     value={item.category}
                     onChange={(event) => updateItem(index, 'category', event.target.value)}
+                    disabled={!!projectQuery.data}
                   >
                     <option value="material">Material</option>
                     <option value="hardware">Ferragem</option>
@@ -326,6 +327,7 @@ export default function BudgetPage() {
                     min={0}
                     value={item.qty}
                     onChange={(event) => updateItem(index, 'qty', event.target.value)}
+                    disabled={!!projectQuery.data}
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -336,13 +338,14 @@ export default function BudgetPage() {
                     step="0.01"
                     value={item.unitCost}
                     onChange={(event) => updateItem(index, 'unitCost', event.target.value)}
+                    disabled={!!projectQuery.data}
                   />
                 </td>
                 <td className="px-4 py-2 font-medium text-zinc-100">
                   {formatCurrency(item.qty * item.unitCost)}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <button className="text-red-400 hover:text-red-300" onClick={() => removeItem(index)}>
+                  <button className="text-red-400 hover:text-red-300 disabled:opacity-50" onClick={() => removeItem(index)} disabled={!!projectQuery.data}>
                     Remover
                   </button>
                 </td>
@@ -361,5 +364,13 @@ export default function BudgetPage() {
         </table>
       </section>
     </AppShell>
+  );
+}
+
+export default function BudgetPage() {
+  return (
+    <Suspense fallback={<AppShell><p className="text-sm text-zinc-400">Carregando orçamento...</p></AppShell>}>
+      <BudgetPageContent />
+    </Suspense>
   );
 }

@@ -3,8 +3,9 @@
 import { AppShell } from '@/components/app-shell';
 import { ThreeWorkspace } from '@/components/three-workspace';
 import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
-export default function WorkspacePage() {
+function WorkspacePageContent() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('projectId') ?? undefined;
 
@@ -16,5 +17,13 @@ export default function WorkspacePage() {
       </p>
       <ThreeWorkspace projectId={projectId} />
     </AppShell>
+  );
+}
+
+export default function WorkspacePage() {
+  return (
+    <Suspense fallback={<AppShell><p className="text-sm text-zinc-400">Carregando workspace...</p></AppShell>}>
+      <WorkspacePageContent />
+    </Suspense>
   );
 }

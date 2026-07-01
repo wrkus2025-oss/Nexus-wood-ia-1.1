@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/auth';
 import { ContactShadows, Environment, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import * as THREE from 'three';
 
 type ThreeWorkspaceProps = {
@@ -320,26 +320,14 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
   const [isolateDoors, setIsolateDoors] = useState(false);
   const [showHardware, setShowHardware] = useState(true);
   const [showMeasurements, setShowMeasurements] = useState(true);
-
-  useEffect(() => {
-    if (!project) {
-      return;
-    }
-    setWidth(project.widthMm);
-    setHeight(project.heightMm);
-    setDepth(project.depthMm);
-    if (detectedShelves > 0) setShelves(detectedShelves);
-    if (detectedDoors > 0) setDoorCount(detectedDoors);
-    if (detectedDrawers > 0) setDrawerCount(detectedDrawers);
-  }, [
-    detectedDoors,
-    detectedDrawers,
-    detectedShelves,
-    project,
-  ]);
-
-  const cameraY = height / 1000 / 2;
-  const cameraZ = Math.max((height / 1000) * 1.25, (width / 1000) * 2.2);
+  const effectiveWidth = project?.widthMm ?? width;
+  const effectiveHeight = project?.heightMm ?? height;
+  const effectiveDepth = project?.depthMm ?? depth;
+  const effectiveShelves = project ? Math.max(1, detectedShelves || 3) : shelves;
+  const effectiveDoors = project ? Math.max(1, detectedDoors || 2) : doorCount;
+  const effectiveDrawers = project ? Math.max(0, detectedDrawers || 0) : drawerCount;
+  const cameraY = effectiveHeight / 1000 / 2;
+  const cameraZ = Math.max((effectiveHeight / 1000) * 1.25, (effectiveWidth / 1000) * 2.2);
 
   return (
     <div className="space-y-4">
@@ -362,13 +350,13 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
 
       <div className="grid grid-cols-2 gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:grid-cols-5">
         {[
-          { label: 'Largura (mm)', value: width, setter: setWidth, min: 600, max: 4000 },
-          { label: 'Altura (mm)', value: height, setter: setHeight, min: 1200, max: 3600 },
-          { label: 'Profundidade (mm)', value: depth, setter: setDepth, min: 300, max: 1200 },
-          { label: 'Prateleiras', value: shelves, setter: setShelves, min: 0, max: 12 },
-          { label: 'Portas', value: doorCount, setter: setDoorCount, min: 0, max: 8 },
-          { label: 'Gavetas', value: drawerCount, setter: setDrawerCount, min: 0, max: 12 },
-        ].map(({ label, value, setter, min, max }) => (
+          { label: 'Largura (mm)', setter: setWidth, min: 600, max: 4000 },
+          { label: 'Altura (mm)', setter: setHeight, min: 1200, max: 3600 },
+          { label: 'Profundidade (mm)', setter: setDepth, min: 300, max: 1200 },
+          { label: 'Prateleiras', setter: setShelves, min: 0, max: 12 },
+          { label: 'Portas', setter: setDoorCount, min: 0, max: 8 },
+          { label: 'Gavetas', setter: setDrawerCount, min: 0, max: 12 },
+        ].map(({ label, setter, min, max }) => (
           <div key={label}>
             <label className="mb-1 block text-xs text-zinc-400">{label}</label>
             <input
@@ -376,7 +364,20 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
               type="number"
               min={min}
               max={max}
-              value={value}
+              value={
+                label === 'Largura (mm)'
+                  ? effectiveWidth
+                  : label === 'Altura (mm)'
+                    ? effectiveHeight
+                    : label === 'Profundidade (mm)'
+                      ? effectiveDepth
+                      : label === 'Prateleiras'
+                        ? effectiveShelves
+                        : label === 'Portas'
+                          ? effectiveDoors
+                          : effectiveDrawers
+              }
+              disabled={!!project}
               onChange={(event) => setter(Number(event.target.value))}
             />
           </div>
@@ -437,13 +438,13 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
           </mesh>
 
           <Cabinet
-            width={width}
-            height={height}
-            depth={depth}
+            width={effectiveWidth}
+            height={effectiveHeight}
+            depth={effectiveDepth}
             color={color}
-            shelves={shelves}
-            doorCount={doorCount}
-            drawerCount={drawerCount}
+            shelves={effectiveShelves}
+            doorCount={effectiveDoors}
+            drawerCount={effectiveDrawers}
             doorOpen={doorOpen}
             drawerOpen={drawerOpen}
             explode={explode}
