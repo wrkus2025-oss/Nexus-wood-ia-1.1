@@ -12,7 +12,8 @@ export class MaterialsService {
   ) {}
 
   private async workspaceId(userId: string) {
-    return (await this.workspacesService.getActiveMembershipOrThrow(userId)).workspace.id;
+    return (await this.workspacesService.getActiveMembershipOrThrow(userId))
+      .workspace.id;
   }
 
   private async resolveCategory(userId: string, categoryName?: string) {
@@ -46,7 +47,10 @@ export class MaterialsService {
   }
 
   async create(userId: string, dto: CreateMaterialDto) {
-    const { workspaceId, categoryId } = await this.resolveCategory(userId, dto.categoryName);
+    const { workspaceId, categoryId } = await this.resolveCategory(
+      userId,
+      dto.categoryName,
+    );
     return this.prisma.material.create({
       data: {
         workspaceId,
@@ -71,7 +75,9 @@ export class MaterialsService {
 
   async update(userId: string, id: string, dto: UpdateMaterialDto) {
     const workspaceId = await this.workspaceId(userId);
-    const material = await this.prisma.material.findFirst({ where: { id, workspaceId } });
+    const material = await this.prisma.material.findFirst({
+      where: { id, workspaceId },
+    });
     if (!material) {
       throw new NotFoundException('Material not found');
     }
@@ -100,7 +106,9 @@ export class MaterialsService {
 
   async remove(userId: string, id: string) {
     const workspaceId = await this.workspaceId(userId);
-    const material = await this.prisma.material.findFirst({ where: { id, workspaceId } });
+    const material = await this.prisma.material.findFirst({
+      where: { id, workspaceId },
+    });
     if (!material) {
       throw new NotFoundException('Material not found');
     }

@@ -20,13 +20,15 @@ export class WorkspacesService {
   ) {}
 
   private slugify(value: string) {
-    return value
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[^a-z0-9\s-]/g, '')
-      .trim()
-      .replace(/\s+/g, '-')
-      .slice(0, 48) || 'workspace';
+    return (
+      value
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[^a-z0-9\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .slice(0, 48) || 'workspace'
+    );
   }
 
   private async uniqueSlug(name: string) {
@@ -54,9 +56,24 @@ export class WorkspacesService {
             { key: 'DRAFT', label: 'Rascunho', orderIndex: 0, color: 'zinc' },
             { key: 'APPROVED', label: 'Aprovado', orderIndex: 1, color: 'sky' },
             { key: 'CUTTING', label: 'Corte', orderIndex: 2, color: 'amber' },
-            { key: 'EDGE_BANDING', label: 'Fita de Borda', orderIndex: 3, color: 'fuchsia' },
-            { key: 'ASSEMBLY', label: 'Montagem', orderIndex: 4, color: 'violet' },
-            { key: 'DELIVERED', label: 'Entregue', orderIndex: 5, color: 'emerald' },
+            {
+              key: 'EDGE_BANDING',
+              label: 'Fita de Borda',
+              orderIndex: 3,
+              color: 'fuchsia',
+            },
+            {
+              key: 'ASSEMBLY',
+              label: 'Montagem',
+              orderIndex: 4,
+              color: 'violet',
+            },
+            {
+              key: 'DELIVERED',
+              label: 'Entregue',
+              orderIndex: 5,
+              color: 'emerald',
+            },
           ],
         },
       },
@@ -70,11 +87,14 @@ export class WorkspacesService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    const activeWorkspaceId = user.activeWorkspaceId ?? user.memberships[0]?.workspaceId;
+    const activeWorkspaceId =
+      user.activeWorkspaceId ?? user.memberships[0]?.workspaceId;
     if (!activeWorkspaceId) {
       throw new BadRequestException('User has no workspace');
     }
-    const membership = user.memberships.find((item) => item.workspaceId === activeWorkspaceId);
+    const membership = user.memberships.find(
+      (item) => item.workspaceId === activeWorkspaceId,
+    );
     if (!membership) {
       throw new ForbiddenException('Workspace membership not found');
     }
@@ -121,7 +141,8 @@ export class WorkspacesService {
   }
 
   async getCurrent(userId: string) {
-    const { membership, workspace } = await this.getActiveMembershipOrThrow(userId);
+    const { membership, workspace } =
+      await this.getActiveMembershipOrThrow(userId);
     return {
       id: workspace.id,
       name: workspace.name,
@@ -152,9 +173,24 @@ export class WorkspacesService {
             { key: 'DRAFT', label: 'Rascunho', orderIndex: 0, color: 'zinc' },
             { key: 'APPROVED', label: 'Aprovado', orderIndex: 1, color: 'sky' },
             { key: 'CUTTING', label: 'Corte', orderIndex: 2, color: 'amber' },
-            { key: 'EDGE_BANDING', label: 'Fita de Borda', orderIndex: 3, color: 'fuchsia' },
-            { key: 'ASSEMBLY', label: 'Montagem', orderIndex: 4, color: 'violet' },
-            { key: 'DELIVERED', label: 'Entregue', orderIndex: 5, color: 'emerald' },
+            {
+              key: 'EDGE_BANDING',
+              label: 'Fita de Borda',
+              orderIndex: 3,
+              color: 'fuchsia',
+            },
+            {
+              key: 'ASSEMBLY',
+              label: 'Montagem',
+              orderIndex: 4,
+              color: 'violet',
+            },
+            {
+              key: 'DELIVERED',
+              label: 'Entregue',
+              orderIndex: 5,
+              color: 'emerald',
+            },
           ],
         },
       },
@@ -201,7 +237,11 @@ export class WorkspacesService {
     });
   }
 
-  async addMember(userId: string, workspaceId: string, dto: AddWorkspaceMemberDto) {
+  async addMember(
+    userId: string,
+    workspaceId: string,
+    dto: AddWorkspaceMemberDto,
+  ) {
     await this.ensureWorkspaceAdmin(userId, workspaceId);
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
@@ -239,7 +279,12 @@ export class WorkspacesService {
     return membership;
   }
 
-  async updateMember(userId: string, workspaceId: string, memberId: string, dto: UpdateWorkspaceMemberDto) {
+  async updateMember(
+    userId: string,
+    workspaceId: string,
+    memberId: string,
+    dto: UpdateWorkspaceMemberDto,
+  ) {
     await this.ensureWorkspaceAdmin(userId, workspaceId);
     const membership = await this.prisma.workspaceMember.update({
       where: { id: memberId },

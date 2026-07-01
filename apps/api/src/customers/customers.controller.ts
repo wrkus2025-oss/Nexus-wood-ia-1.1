@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtUser } from '../auth/auth-user';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateCustomerDto } from './dto/create-customer.dto';
@@ -41,6 +51,8 @@ export class CustomersController {
 
   @Get(':id/projects')
   projects(@Req() req: { user: JwtUser }, @Param('id') id: string) {
-    return this.customersService.findOne(req.user.userId, id).then((customer) => customer.projects);
+    return this.customersService
+      .findOne(req.user.userId, id)
+      .then((customer) => customer.projects);
   }
 }

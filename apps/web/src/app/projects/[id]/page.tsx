@@ -2,12 +2,12 @@
 
 import { AppShell } from '@/components/app-shell';
 import { apiFetch } from '@/lib/api';
-import { queryKeys, useHardware, useMaterials, useProject } from '@/lib/hooks';
+import { queryKeys, useMaterials, useProject } from '@/lib/hooks';
 import { PROJECT_STATUS_BADGE, PROJECT_STATUS_LABEL } from '@/lib/project-status';
 import { useAuthStore } from '@/store/auth';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { FormEvent, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
@@ -16,9 +16,8 @@ export default function ProjectDetailPage() {
   const queryClient = useQueryClient();
   const projectQuery = useProject(token, projectId);
   const materialsQuery = useMaterials(token);
-  const hardwareQuery = useHardware(token);
   const project = projectQuery.data;
-  const spaces = project?.spaces ?? [];
+  const spaces = useMemo(() => project?.spaces ?? [], [project]);
   const units = useMemo(() => spaces.flatMap((space) => space.units.map((unit) => ({ ...unit, spaceId: space.id }))), [spaces]);
   const modules = useMemo(() => units.flatMap((unit) => unit.modules), [units]);
   const [spaceName, setSpaceName] = useState('');

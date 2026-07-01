@@ -41,7 +41,11 @@ export class MaterialsController {
 
   @Patch(':id')
   @Roles(Role.ADMIN, Role.DESIGNER)
-  update(@Req() req: { user: JwtUser }, @Param('id') id: string, @Body() dto: UpdateMaterialDto) {
+  update(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Body() dto: UpdateMaterialDto,
+  ) {
     return this.materialsService.update(req.user.userId, id, dto);
   }
 

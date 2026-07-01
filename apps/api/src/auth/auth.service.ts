@@ -57,7 +57,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const currentWorkspaceId = user.activeWorkspaceId ?? user.memberships[0]?.workspaceId ?? null;
+    const currentWorkspaceId =
+      user.activeWorkspaceId ?? user.memberships[0]?.workspaceId ?? null;
     if (currentWorkspaceId && user.activeWorkspaceId !== currentWorkspaceId) {
       await this.usersService.setActiveWorkspace(user.id, currentWorkspaceId);
     }
@@ -110,7 +111,8 @@ export class AuthService {
       workspace: membership.workspace,
     }));
 
-    const activeWorkspace = user.activeWorkspace ?? memberships[0]?.workspace ?? null;
+    const activeWorkspace =
+      user.activeWorkspace ?? memberships[0]?.workspace ?? null;
 
     return {
       id: user.id,
@@ -125,8 +127,18 @@ export class AuthService {
     };
   }
 
-  private signToken(userId: string, email: string, role: Role, workspaceId?: string | null) {
-    const accessToken = this.jwtService.sign({ sub: userId, email, role, workspaceId });
+  private signToken(
+    userId: string,
+    email: string,
+    role: Role,
+    workspaceId?: string | null,
+  ) {
+    const accessToken = this.jwtService.sign({
+      sub: userId,
+      email,
+      role,
+      workspaceId,
+    });
     return { accessToken };
   }
 }

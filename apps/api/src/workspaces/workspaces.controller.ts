@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtUser } from '../auth/auth-user';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AddWorkspaceMemberDto } from './dto/add-workspace-member.dto';
@@ -57,6 +66,11 @@ export class WorkspacesController {
     @Param('memberId') memberId: string,
     @Body() dto: UpdateWorkspaceMemberDto,
   ) {
-    return this.workspacesService.updateMember(req.user.userId, id, memberId, dto);
+    return this.workspacesService.updateMember(
+      req.user.userId,
+      id,
+      memberId,
+      dto,
+    );
   }
 }

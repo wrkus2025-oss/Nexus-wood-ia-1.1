@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
 import { Role } from '@prisma/client';
 import { WorkspacesService } from './workspaces.service';
 
@@ -6,7 +7,9 @@ describe('WorkspacesService', () => {
     const prisma = {
       workspace: {
         findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue({ id: 'ws-1', name: 'Demo', slug: 'demo' }),
+        create: jest
+          .fn()
+          .mockResolvedValue({ id: 'ws-1', name: 'Demo', slug: 'demo' }),
       },
     } as any;
     const usersService = {
@@ -14,7 +17,11 @@ describe('WorkspacesService', () => {
     } as any;
     const service = new WorkspacesService(prisma, usersService);
 
-    const workspace = await service.createInitialWorkspace('user-1', Role.ADMIN, 'Demo');
+    const workspace = await service.createInitialWorkspace(
+      'user-1',
+      Role.ADMIN,
+      'Demo',
+    );
 
     expect(prisma.workspace.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -24,7 +31,10 @@ describe('WorkspacesService', () => {
         }),
       }),
     );
-    expect(usersService.setActiveWorkspace).toHaveBeenCalledWith('user-1', 'ws-1');
+    expect(usersService.setActiveWorkspace).toHaveBeenCalledWith(
+      'user-1',
+      'ws-1',
+    );
     expect(workspace.id).toBe('ws-1');
   });
 });

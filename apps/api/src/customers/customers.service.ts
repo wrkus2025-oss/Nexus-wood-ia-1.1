@@ -16,7 +16,8 @@ export class CustomersService {
   ) {}
 
   private async workspaceId(userId: string) {
-    return (await this.workspacesService.getActiveMembershipOrThrow(userId)).workspace.id;
+    return (await this.workspacesService.getActiveMembershipOrThrow(userId))
+      .workspace.id;
   }
 
   async findAll(userId: string) {
@@ -61,7 +62,11 @@ export class CustomersService {
             }
           : undefined,
       },
-      include: { contacts: true, addresses: true, _count: { select: { projects: true } } },
+      include: {
+        contacts: true,
+        addresses: true,
+        _count: { select: { projects: true } },
+      },
     });
   }
 
@@ -73,7 +78,13 @@ export class CustomersService {
         contacts: true,
         addresses: true,
         projects: {
-          select: { id: true, name: true, code: true, status: true, updatedAt: true },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            status: true,
+            updatedAt: true,
+          },
           orderBy: { updatedAt: 'desc' },
         },
       },
@@ -136,7 +147,9 @@ export class CustomersService {
 
   async findByWorkspace(userId: string, id: string) {
     const workspaceId = await this.workspaceId(userId);
-    const customer = await this.prisma.customer.findFirst({ where: { id, workspaceId } });
+    const customer = await this.prisma.customer.findFirst({
+      where: { id, workspaceId },
+    });
     if (!customer) {
       throw new NotFoundException('Customer not found');
     }

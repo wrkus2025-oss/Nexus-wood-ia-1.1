@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   AuditEventType,
   PartType,
@@ -34,17 +31,20 @@ export class ProjectsService {
   ) {}
 
   private async workspace(userId: string) {
-    return (await this.workspacesService.getActiveMembershipOrThrow(userId)).workspace;
+    return (await this.workspacesService.getActiveMembershipOrThrow(userId))
+      .workspace;
   }
 
   private slug(value: string) {
-    return value
-      .toUpperCase()
-      .normalize('NFD')
-      .replace(/[^A-Z0-9\s-]/g, '')
-      .trim()
-      .replace(/\s+/g, '-')
-      .slice(0, 24) || 'ITEM';
+    return (
+      value
+        .toUpperCase()
+        .normalize('NFD')
+        .replace(/[^A-Z0-9\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .slice(0, 24) || 'ITEM'
+    );
   }
 
   private async audit(
@@ -71,18 +71,28 @@ export class ProjectsService {
 
   private async projectOrThrow(userId: string, id: string) {
     const workspace = await this.workspace(userId);
-    const project = await this.prisma.project.findFirst({ where: { id, workspaceId: workspace.id } });
+    const project = await this.prisma.project.findFirst({
+      where: { id, workspaceId: workspace.id },
+    });
     if (!project) {
       throw new NotFoundException('Project not found');
     }
     return { workspace, project };
   }
 
-  private async stageForStatus(workspaceId: string, status: ProjectStatus, explicitStageId?: string) {
+  private async stageForStatus(
+    workspaceId: string,
+    status: ProjectStatus,
+    explicitStageId?: string,
+  ) {
     if (explicitStageId) {
-      return this.prisma.workflowStage.findFirst({ where: { id: explicitStageId, workspaceId } });
+      return this.prisma.workflowStage.findFirst({
+        where: { id: explicitStageId, workspaceId },
+      });
     }
-    return this.prisma.workflowStage.findFirst({ where: { workspaceId, key: status } });
+    return this.prisma.workflowStage.findFirst({
+      where: { workspaceId, key: status },
+    });
   }
 
   async findAll(userId: string) {
@@ -112,7 +122,11 @@ export class ProjectsService {
                     parts: {
                       include: {
                         material: { include: { category: true } },
-                        hardwareItems: { include: { hardware: { include: { category: true } } } },
+                        hardwareItems: {
+                          include: {
+                            hardware: { include: { category: true } },
+                          },
+                        },
                       },
                     },
                   },
@@ -137,11 +151,15 @@ export class ProjectsService {
           orderBy: { createdAt: 'desc' },
         },
         attachments: {
-          include: { createdBy: { select: { id: true, name: true, email: true } } },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true } },
+          },
           orderBy: { createdAt: 'desc' },
         },
         projectNotes: {
-          include: { createdBy: { select: { id: true, name: true, email: true } } },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true } },
+          },
           orderBy: { createdAt: 'desc' },
         },
         auditEvents: {
@@ -155,7 +173,8 @@ export class ProjectsService {
   async create(userId: string, dto: CreateProjectDto) {
     const workspace = await this.workspace(userId);
     await this.customersService.findByWorkspace(userId, dto.customerId);
-    const code = dto.code ?? `${this.slug(dto.name)}-${Date.now().toString().slice(-4)}`;
+    const code =
+      dto.code ?? `${this.slug(dto.name)}-${Date.now().toString().slice(-4)}`;
     const project = await this.prisma.project.create({
       data: {
         workspaceId: workspace.id,
@@ -184,7 +203,15 @@ export class ProjectsService {
         note: 'Projeto criado',
       },
     });
-    await this.audit(workspace.id, userId, 'PROJECT_CREATED', 'project', project.id, project.id, { code: project.code });
+    await this.audit(
+      workspace.id,
+      userId,
+      'PROJECT_CREATED',
+      'project',
+      project.id,
+      project.id,
+      { code: project.code },
+    );
     return this.findOne(userId, project.id);
   }
 
@@ -209,7 +236,14 @@ export class ProjectsService {
         quotedValue: dto.quotedValue,
       },
     });
-    await this.audit(workspace.id, userId, 'PROJECT_UPDATED', 'project', project.id, project.id);
+    await this.audit(
+      workspace.id,
+      userId,
+      'PROJECT_UPDATED',
+      'project',
+      project.id,
+      project.id,
+    );
     return this.findOne(userId, id);
   }
 
@@ -220,7 +254,11 @@ export class ProjectsService {
 
   async updateStage(userId: string, id: string, dto: UpdateProjectStageDto) {
     const { workspace, project } = await this.projectOrThrow(userId, id);
-    const stage = await this.stageForStatus(workspace.id, dto.status, dto.stageId);
+    const stage = await this.stageForStatus(
+      workspace.id,
+      dto.status,
+      dto.stageId,
+    );
     const updated = await this.prisma.project.update({
       where: { id },
       data: { status: dto.status },
@@ -235,16 +273,30 @@ export class ProjectsService {
         note: dto.note,
       },
     });
-    await this.audit(workspace.id, userId, 'STATUS_CHANGED', 'project', project.id, project.id, {
-      from: project.status,
-      to: dto.status,
-    });
+    await this.audit(
+      workspace.id,
+      userId,
+      'STATUS_CHANGED',
+      'project',
+      project.id,
+      project.id,
+      {
+        from: project.status,
+        to: dto.status,
+      },
+    );
     return updated;
   }
 
-  async createSpace(userId: string, projectId: string, dto: CreateProjectSpaceDto) {
+  async createSpace(
+    userId: string,
+    projectId: string,
+    dto: CreateProjectSpaceDto,
+  ) {
     const { workspace, project } = await this.projectOrThrow(userId, projectId);
-    const existingCount = await this.prisma.projectSpace.count({ where: { projectId } });
+    const existingCount = await this.prisma.projectSpace.count({
+      where: { projectId },
+    });
     const space = await this.prisma.projectSpace.create({
       data: {
         projectId,
@@ -256,13 +308,27 @@ export class ProjectsService {
         depthMm: dto.depthMm,
       },
     });
-    await this.audit(workspace.id, userId, 'SPACE_CREATED', 'projectSpace', space.id, project.id);
+    await this.audit(
+      workspace.id,
+      userId,
+      'SPACE_CREATED',
+      'projectSpace',
+      space.id,
+      project.id,
+    );
     return space;
   }
 
-  async updateSpace(userId: string, projectId: string, spaceId: string, dto: UpdateProjectSpaceDto) {
-    const { project } = await this.projectOrThrow(userId, projectId);
-    const space = await this.prisma.projectSpace.findFirst({ where: { id: spaceId, projectId } });
+  async updateSpace(
+    userId: string,
+    projectId: string,
+    spaceId: string,
+    dto: UpdateProjectSpaceDto,
+  ) {
+    await this.projectOrThrow(userId, projectId);
+    const space = await this.prisma.projectSpace.findFirst({
+      where: { id: spaceId, projectId },
+    });
     if (!space) {
       throw new NotFoundException('Project space not found');
     }
@@ -281,7 +347,9 @@ export class ProjectsService {
 
   async deleteSpace(userId: string, projectId: string, spaceId: string) {
     await this.projectOrThrow(userId, projectId);
-    const space = await this.prisma.projectSpace.findFirst({ where: { id: spaceId, projectId } });
+    const space = await this.prisma.projectSpace.findFirst({
+      where: { id: spaceId, projectId },
+    });
     if (!space) {
       throw new NotFoundException('Project space not found');
     }
@@ -294,19 +362,36 @@ export class ProjectsService {
       where: { space: { projectId } },
       include: {
         space: true,
-        modules: { include: { parts: { include: { material: true, hardwareItems: { include: { hardware: true } } } } } },
+        modules: {
+          include: {
+            parts: {
+              include: {
+                material: true,
+                hardwareItems: { include: { hardware: true } },
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async createUnit(userId: string, projectId: string, dto: CreateProjectUnitDto) {
+  async createUnit(
+    userId: string,
+    projectId: string,
+    dto: CreateProjectUnitDto,
+  ) {
     const { workspace, project } = await this.projectOrThrow(userId, projectId);
-    const space = await this.prisma.projectSpace.findFirst({ where: { id: dto.spaceId, projectId } });
+    const space = await this.prisma.projectSpace.findFirst({
+      where: { id: dto.spaceId, projectId },
+    });
     if (!space) {
       throw new NotFoundException('Project space not found');
     }
-    const count = await this.prisma.projectUnit.count({ where: { spaceId: dto.spaceId } });
+    const count = await this.prisma.projectUnit.count({
+      where: { spaceId: dto.spaceId },
+    });
     const unit = await this.prisma.projectUnit.create({
       data: {
         spaceId: dto.spaceId,
@@ -318,13 +403,27 @@ export class ProjectsService {
         notes: dto.notes,
       },
     });
-    await this.audit(workspace.id, userId, 'UNIT_CREATED', 'projectUnit', unit.id, project.id);
+    await this.audit(
+      workspace.id,
+      userId,
+      'UNIT_CREATED',
+      'projectUnit',
+      unit.id,
+      project.id,
+    );
     return unit;
   }
 
-  async updateUnit(userId: string, projectId: string, unitId: string, dto: UpdateProjectUnitDto) {
+  async updateUnit(
+    userId: string,
+    projectId: string,
+    unitId: string,
+    dto: UpdateProjectUnitDto,
+  ) {
     await this.projectOrThrow(userId, projectId);
-    const unit = await this.prisma.projectUnit.findFirst({ where: { id: unitId, space: { projectId } } });
+    const unit = await this.prisma.projectUnit.findFirst({
+      where: { id: unitId, space: { projectId } },
+    });
     if (!unit) {
       throw new NotFoundException('Project unit not found');
     }
@@ -344,7 +443,9 @@ export class ProjectsService {
 
   async deleteUnit(userId: string, projectId: string, unitId: string) {
     await this.projectOrThrow(userId, projectId);
-    const unit = await this.prisma.projectUnit.findFirst({ where: { id: unitId, space: { projectId } } });
+    const unit = await this.prisma.projectUnit.findFirst({
+      where: { id: unitId, space: { projectId } },
+    });
     if (!unit) {
       throw new NotFoundException('Project unit not found');
     }
@@ -369,28 +470,42 @@ export class ProjectsService {
         notes: dto.notes,
       },
     });
-    await this.audit(workspace.id, userId, 'MODULE_CREATED', 'unitModule', module.id, unit.space.project.id);
+    await this.audit(
+      workspace.id,
+      userId,
+      'MODULE_CREATED',
+      'unitModule',
+      module.id,
+      unit.space.project.id,
+    );
     return module;
   }
 
   async createPart(userId: string, moduleId: string, dto: CreatePartDto) {
     const workspace = await this.workspace(userId);
     const module = await this.prisma.unitModule.findFirst({
-      where: { id: moduleId, unit: { space: { project: { workspaceId: workspace.id } } } },
+      where: {
+        id: moduleId,
+        unit: { space: { project: { workspaceId: workspace.id } } },
+      },
       include: { unit: { include: { space: { include: { project: true } } } } },
     });
     if (!module) {
       throw new NotFoundException('Project module not found');
     }
     if (dto.materialId) {
-      const material = await this.prisma.material.findFirst({ where: { id: dto.materialId, workspaceId: workspace.id } });
+      const material = await this.prisma.material.findFirst({
+        where: { id: dto.materialId, workspaceId: workspace.id },
+      });
       if (!material) {
         throw new NotFoundException('Material not found');
       }
     }
     const hardwareIds = dto.hardwareItems?.map((item) => item.hardwareId) ?? [];
     if (hardwareIds.length) {
-      const count = await this.prisma.hardware.count({ where: { id: { in: hardwareIds }, workspaceId: workspace.id } });
+      const count = await this.prisma.hardware.count({
+        where: { id: { in: hardwareIds }, workspaceId: workspace.id },
+      });
       if (count !== hardwareIds.length) {
         throw new NotFoundException('Hardware item not found');
       }
@@ -423,9 +538,19 @@ export class ProjectsService {
             }
           : undefined,
       },
-      include: { material: true, hardwareItems: { include: { hardware: true } } },
+      include: {
+        material: true,
+        hardwareItems: { include: { hardware: true } },
+      },
     });
-    await this.audit(workspace.id, userId, 'PART_CREATED', 'part', part.id, module.unit.space.project.id);
+    await this.audit(
+      workspace.id,
+      userId,
+      'PART_CREATED',
+      'part',
+      part.id,
+      module.unit.space.project.id,
+    );
     return part;
   }
 
@@ -433,7 +558,10 @@ export class ProjectsService {
     await this.projectOrThrow(userId, projectId);
     return this.prisma.projectStageHistory.findMany({
       where: { projectId },
-      include: { stage: true, changedBy: { select: { id: true, name: true, email: true } } },
+      include: {
+        stage: true,
+        changedBy: { select: { id: true, name: true, email: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -450,7 +578,11 @@ export class ProjectsService {
     });
   }
 
-  async createTask(userId: string, projectId: string, dto: CreateProductionTaskDto) {
+  async createTask(
+    userId: string,
+    projectId: string,
+    dto: CreateProductionTaskDto,
+  ) {
     const { workspace, project } = await this.projectOrThrow(userId, projectId);
     const task = await this.prisma.productionTask.create({
       data: {
@@ -467,13 +599,27 @@ export class ProjectsService {
         createdBy: { select: { id: true, name: true, email: true } },
       },
     });
-    await this.audit(workspace.id, userId, 'TASK_CREATED', 'productionTask', task.id, project.id);
+    await this.audit(
+      workspace.id,
+      userId,
+      'TASK_CREATED',
+      'productionTask',
+      task.id,
+      project.id,
+    );
     return task;
   }
 
-  async updateTask(userId: string, projectId: string, taskId: string, dto: UpdateProductionTaskDto) {
+  async updateTask(
+    userId: string,
+    projectId: string,
+    taskId: string,
+    dto: UpdateProductionTaskDto,
+  ) {
     const { workspace, project } = await this.projectOrThrow(userId, projectId);
-    const task = await this.prisma.productionTask.findFirst({ where: { id: taskId, projectId } });
+    const task = await this.prisma.productionTask.findFirst({
+      where: { id: taskId, projectId },
+    });
     if (!task) {
       throw new NotFoundException('Task not found');
     }
@@ -491,7 +637,15 @@ export class ProjectsService {
         createdBy: { select: { id: true, name: true, email: true } },
       },
     });
-    await this.audit(workspace.id, userId, 'TASK_UPDATED', 'productionTask', task.id, project.id, { status: dto.status });
+    await this.audit(
+      workspace.id,
+      userId,
+      'TASK_UPDATED',
+      'productionTask',
+      task.id,
+      project.id,
+      { status: dto.status },
+    );
     return updated;
   }
 
@@ -504,7 +658,11 @@ export class ProjectsService {
     });
   }
 
-  async addAttachment(userId: string, projectId: string, dto: CreateAttachmentDto) {
+  async addAttachment(
+    userId: string,
+    projectId: string,
+    dto: CreateAttachmentDto,
+  ) {
     const { workspace, project } = await this.projectOrThrow(userId, projectId);
     const attachment = await this.prisma.attachment.create({
       data: {
@@ -519,7 +677,14 @@ export class ProjectsService {
       },
       include: { createdBy: { select: { id: true, name: true, email: true } } },
     });
-    await this.audit(workspace.id, userId, 'ATTACHMENT_CREATED', 'attachment', attachment.id, project.id);
+    await this.audit(
+      workspace.id,
+      userId,
+      'ATTACHMENT_CREATED',
+      'attachment',
+      attachment.id,
+      project.id,
+    );
     return attachment;
   }
 
@@ -543,7 +708,14 @@ export class ProjectsService {
       },
       include: { createdBy: { select: { id: true, name: true, email: true } } },
     });
-    await this.audit(workspace.id, userId, 'NOTE_CREATED', 'projectNote', note.id, project.id);
+    await this.audit(
+      workspace.id,
+      userId,
+      'NOTE_CREATED',
+      'projectNote',
+      note.id,
+      project.id,
+    );
     return note;
   }
 

@@ -23,8 +23,9 @@ export default function KanbanPage() {
   });
 
   const groupedProjects = useMemo(() => {
-    const initial = Object.fromEntries(PROJECT_STATUSES.map((status) => [status, [] as typeof projectsQuery.data])) as Record<ProjectStatus, typeof projectsQuery.data>;
-    for (const project of projectsQuery.data ?? []) {
+    const projects = projectsQuery.data ?? [];
+    const initial = Object.fromEntries(PROJECT_STATUSES.map((status) => [status, [] as typeof projects])) as Record<ProjectStatus, typeof projects>;
+    for (const project of projects) {
       (initial[project.status] ??= []).push(project);
     }
     return initial;

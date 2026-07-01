@@ -47,17 +47,29 @@ export class ProjectsController {
   }
 
   @Patch('projects/:id')
-  update(@Req() req: { user: JwtUser }, @Param('id') id: string, @Body() dto: UpdateProjectDto) {
+  update(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Body() dto: UpdateProjectDto,
+  ) {
     return this.projectsService.update(req.user.userId, id, dto);
   }
 
   @Patch('projects/:id/status')
-  updateStatus(@Req() req: { user: JwtUser }, @Param('id') id: string, @Body() dto: UpdateProjectStageDto) {
+  updateStatus(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Body() dto: UpdateProjectStageDto,
+  ) {
     return this.projectsService.updateStage(req.user.userId, id, dto);
   }
 
   @Patch('projects/:id/stage')
-  updateStage(@Req() req: { user: JwtUser }, @Param('id') id: string, @Body() dto: UpdateProjectStageDto) {
+  updateStage(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Body() dto: UpdateProjectStageDto,
+  ) {
     return this.projectsService.updateStage(req.user.userId, id, dto);
   }
 
@@ -67,7 +79,11 @@ export class ProjectsController {
   }
 
   @Post('projects/:id/spaces')
-  createSpace(@Req() req: { user: JwtUser }, @Param('id') id: string, @Body() dto: CreateProjectSpaceDto) {
+  createSpace(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Body() dto: CreateProjectSpaceDto,
+  ) {
     return this.projectsService.createSpace(req.user.userId, id, dto);
   }
 
@@ -82,7 +98,11 @@ export class ProjectsController {
   }
 
   @Delete('projects/:id/spaces/:spaceId')
-  deleteSpace(@Req() req: { user: JwtUser }, @Param('id') id: string, @Param('spaceId') spaceId: string) {
+  deleteSpace(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Param('spaceId') spaceId: string,
+  ) {
     return this.projectsService.deleteSpace(req.user.userId, id, spaceId);
   }
 
@@ -92,7 +112,11 @@ export class ProjectsController {
   }
 
   @Post('projects/:id/units')
-  createUnit(@Req() req: { user: JwtUser }, @Param('id') id: string, @Body() dto: CreateProjectUnitDto) {
+  createUnit(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Body() dto: CreateProjectUnitDto,
+  ) {
     return this.projectsService.createUnit(req.user.userId, id, dto);
   }
 
@@ -107,17 +131,29 @@ export class ProjectsController {
   }
 
   @Delete('projects/:id/units/:unitId')
-  deleteUnit(@Req() req: { user: JwtUser }, @Param('id') id: string, @Param('unitId') unitId: string) {
+  deleteUnit(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Param('unitId') unitId: string,
+  ) {
     return this.projectsService.deleteUnit(req.user.userId, id, unitId);
   }
 
   @Post('units/:unitId/modules')
-  createModule(@Req() req: { user: JwtUser }, @Param('unitId') unitId: string, @Body() dto: CreateUnitModuleDto) {
+  createModule(
+    @Req() req: { user: JwtUser },
+    @Param('unitId') unitId: string,
+    @Body() dto: CreateUnitModuleDto,
+  ) {
     return this.projectsService.createModule(req.user.userId, unitId, dto);
   }
 
   @Post('modules/:moduleId/parts')
-  createPart(@Req() req: { user: JwtUser }, @Param('moduleId') moduleId: string, @Body() dto: CreatePartDto) {
+  createPart(
+    @Req() req: { user: JwtUser },
+    @Param('moduleId') moduleId: string,
+    @Body() dto: CreatePartDto,
+  ) {
     return this.projectsService.createPart(req.user.userId, moduleId, dto);
   }
 
@@ -132,7 +168,11 @@ export class ProjectsController {
   }
 
   @Post('projects/:id/tasks')
-  createTask(@Req() req: { user: JwtUser }, @Param('id') id: string, @Body() dto: CreateProductionTaskDto) {
+  createTask(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Body() dto: CreateProductionTaskDto,
+  ) {
     return this.projectsService.createTask(req.user.userId, id, dto);
   }
 
@@ -152,7 +192,11 @@ export class ProjectsController {
   }
 
   @Post('projects/:id/attachments')
-  addAttachment(@Req() req: { user: JwtUser }, @Param('id') id: string, @Body() dto: CreateAttachmentDto) {
+  addAttachment(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Body() dto: CreateAttachmentDto,
+  ) {
     return this.projectsService.addAttachment(req.user.userId, id, dto);
   }
 
@@ -162,7 +206,11 @@ export class ProjectsController {
   }
 
   @Post('projects/:id/notes')
-  addNote(@Req() req: { user: JwtUser }, @Param('id') id: string, @Body() dto: CreateProjectNoteDto) {
+  addNote(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Body() dto: CreateProjectNoteDto,
+  ) {
     return this.projectsService.addNote(req.user.userId, id, dto);
   }
 

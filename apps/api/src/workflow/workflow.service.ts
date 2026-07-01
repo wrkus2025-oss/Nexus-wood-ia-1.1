@@ -10,7 +10,8 @@ export class WorkflowService {
   ) {}
 
   async listStages(userId: string) {
-    const { workspace } = await this.workspacesService.getActiveMembershipOrThrow(userId);
+    const { workspace } =
+      await this.workspacesService.getActiveMembershipOrThrow(userId);
     return this.prisma.workflowStage.findMany({
       where: { workspaceId: workspace.id },
       orderBy: { orderIndex: 'asc' },

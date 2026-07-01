@@ -12,7 +12,8 @@ export class HardwareService {
   ) {}
 
   private async workspaceId(userId: string) {
-    return (await this.workspacesService.getActiveMembershipOrThrow(userId)).workspace.id;
+    return (await this.workspacesService.getActiveMembershipOrThrow(userId))
+      .workspace.id;
   }
 
   private async resolveCategory(userId: string, categoryName?: string) {
@@ -46,7 +47,10 @@ export class HardwareService {
   }
 
   async create(userId: string, dto: CreateHardwareDto) {
-    const { workspaceId, categoryId } = await this.resolveCategory(userId, dto.categoryName);
+    const { workspaceId, categoryId } = await this.resolveCategory(
+      userId,
+      dto.categoryName,
+    );
     return this.prisma.hardware.create({
       data: {
         workspaceId,
@@ -68,7 +72,9 @@ export class HardwareService {
 
   async update(userId: string, id: string, dto: UpdateHardwareDto) {
     const workspaceId = await this.workspaceId(userId);
-    const hardware = await this.prisma.hardware.findFirst({ where: { id, workspaceId } });
+    const hardware = await this.prisma.hardware.findFirst({
+      where: { id, workspaceId },
+    });
     if (!hardware) {
       throw new NotFoundException('Hardware not found');
     }
@@ -94,7 +100,9 @@ export class HardwareService {
 
   async remove(userId: string, id: string) {
     const workspaceId = await this.workspaceId(userId);
-    const hardware = await this.prisma.hardware.findFirst({ where: { id, workspaceId } });
+    const hardware = await this.prisma.hardware.findFirst({
+      where: { id, workspaceId },
+    });
     if (!hardware) {
       throw new NotFoundException('Hardware not found');
     }

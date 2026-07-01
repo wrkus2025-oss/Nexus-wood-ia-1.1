@@ -41,7 +41,11 @@ export class HardwareController {
 
   @Patch(':id')
   @Roles(Role.ADMIN, Role.DESIGNER)
-  update(@Req() req: { user: JwtUser }, @Param('id') id: string, @Body() dto: UpdateHardwareDto) {
+  update(
+    @Req() req: { user: JwtUser },
+    @Param('id') id: string,
+    @Body() dto: UpdateHardwareDto,
+  ) {
     return this.hardwareService.update(req.user.userId, id, dto);
   }
 

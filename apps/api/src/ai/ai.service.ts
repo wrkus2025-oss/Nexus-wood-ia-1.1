@@ -12,32 +12,40 @@ export class AiService {
   ) {}
 
   async ask(userId: string, prompt: string) {
-    const { workspace } = await this.workspacesService.getActiveMembershipOrThrow(userId);
+    const { workspace } =
+      await this.workspacesService.getActiveMembershipOrThrow(userId);
     const openAiKey = this.configService.get<string>('OPENAI_API_KEY');
     const ollamaUrl = this.configService.get<string>('OLLAMA_URL');
 
     let responseText = '';
 
     if (openAiKey) {
-      const model = this.configService.get<string>('OPENAI_MODEL', 'gpt-4o-mini');
+      const model = this.configService.get<string>(
+        'OPENAI_MODEL',
+        'gpt-4o-mini',
+      );
       const authHeader = ['Bearer', openAiKey].join(' ');
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: authHeader,
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: authHeader,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Você é o assistente Nexus Master para marcenaria profissional.',
+              },
+              { role: 'user', content: prompt },
+            ],
+          }),
         },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: 'system',
-              content: 'Você é o assistente Nexus Master para marcenaria profissional.',
-            },
-            { role: 'user', content: prompt },
-          ],
-        }),
-      });
+      );
 
       if (!response.ok) {
         throw new BadRequestException('OpenAI request failed');
@@ -67,18 +75,26 @@ export class AiService {
       };
       responseText = payload.message?.content ?? '';
     } else {
-      throw new BadRequestException('Configure OPENAI_API_KEY or OLLAMA_URL to use AI assistant');
+      throw new BadRequestException(
+        'Configure OPENAI_API_KEY or OLLAMA_URL to use AI assistant',
+      );
     }
 
     await this.prisma.aiHistory.create({
-      data: { userId, workspaceId: workspace.id, prompt, response: responseText },
+      data: {
+        userId,
+        workspaceId: workspace.id,
+        prompt,
+        response: responseText,
+      },
     });
 
     return { response: responseText };
   }
 
   async history(userId: string) {
-    const { workspace } = await this.workspacesService.getActiveMembershipOrThrow(userId);
+    const { workspace } =
+      await this.workspacesService.getActiveMembershipOrThrow(userId);
     return this.prisma.aiHistory.findMany({
       where: { userId, workspaceId: workspace.id },
       orderBy: { createdAt: 'desc' },
