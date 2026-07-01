@@ -32,6 +32,12 @@ Plataforma de marcenaria com IA para orçamento, plano de corte, gestão de prod
 npm start
 ```
 
+Para encerrar:
+
+```bash
+npm run stop
+```
+
 Serviços expostos:
 
 - Web: `http://localhost:3001`
@@ -69,7 +75,8 @@ Login demo após o bootstrap:
 
    ```bash
    cd apps/api
-   npx prisma migrate dev --name init
+   npx prisma generate
+   npx prisma migrate deploy
    npm run seed
    cd ../..
    ```
