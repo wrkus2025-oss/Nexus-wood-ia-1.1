@@ -2,11 +2,13 @@
 
 import { AppShell } from '@/components/app-shell';
 import { apiFetch } from '@/lib/api';
+import { useProject } from '@/lib/hooks';
 import { buildDxfCutPlan, buildSvgCutPlan, downloadTextFile } from '@/lib/cut-export';
 import { CutPiece, CutSettings, optimizeCutPlan } from '@/lib/cut-optimization';
 import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 
 type Material = {
   id: string;
@@ -45,6 +47,8 @@ const CARD_COLORS = [
 ];
 
 export default function CutPlanPage() {
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('projectId') ?? '';
   const token = useAuthStore((state) => state.token);
   const [selectedMaterialId, setSelectedMaterialId] = useState('');
   const [pieces, setPieces] = useState<CutPiece[]>(INITIAL_PIECES);
@@ -55,6 +59,34 @@ export default function CutPlanPage() {
     queryFn: () => apiFetch<Material[]>('/materials', {}, token ?? undefined),
     enabled: !!token,
   });
+  const projectQuery = useProject(token, projectId);
+
+  useEffect(() => {
+    if (!projectQuery.data) {
+      return;
+    }
+    const parts = projectQuery.data.spaces.flatMap((space) =>
+      space.units.flatMap((unit) => unit.modules.flatMap((module) => module.parts)),
+    );
+    const generatedPieces = parts.map((part) => ({
+      label: part.name,
+      widthMm: part.widthMm,
+      heightMm: part.heightMm,
+      qty: part.quantity,
+    }));
+    if (generatedPieces.length > 0) {
+      setPieces(generatedPieces);
+    }
+    const firstMaterial = parts.find((part) => part.material?.id)?.material;
+    if (firstMaterial?.id) {
+      setSelectedMaterialId(firstMaterial.id);
+      setSettings((current) => ({
+        ...current,
+        sheetWidthMm: firstMaterial.sheetWidthMm ?? current.sheetWidthMm,
+        sheetHeightMm: firstMaterial.sheetHeightMm ?? current.sheetHeightMm,
+      }));
+    }
+  }, [projectQuery.data]);
 
   const selectedMaterial = materialsQuery.data?.find((material) => material.id === selectedMaterialId);
 

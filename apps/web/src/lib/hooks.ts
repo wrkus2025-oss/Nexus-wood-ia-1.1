@@ -62,7 +62,7 @@ export function useProject(token: string | null, id: string) {
   return useQuery({
     queryKey: queryKeys.project(id),
     queryFn: () => apiFetch<ProjectDetail>(`/projects/${id}`, {}, token ?? undefined),
-    enabled: !!token,
+    enabled: !!token && !!id,
   });
 }
 

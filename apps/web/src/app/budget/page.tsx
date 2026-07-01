@@ -2,10 +2,12 @@
 
 import { AppShell } from '@/components/app-shell';
 import { apiFetch } from '@/lib/api';
+import { useProject } from '@/lib/hooks';
 import { buildQuotePdf, QuoteItem } from '@/lib/quote-pdf';
 import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 
 type Material = { id: string; name: string; thicknessMm: number; pricePerSheet: number };
 type Hardware = { id: string; name: string; type: string; unitCost: number };
@@ -33,6 +35,8 @@ function formatCurrency(value: number) {
 }
 
 export default function BudgetPage() {
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('projectId') ?? '';
   const token = useAuthStore((state) => state.token);
   const [items, setItems] = useState<BudgetItem[]>(INITIAL_ITEMS);
   const [marginPercent, setMarginPercent] = useState(32);
@@ -51,6 +55,74 @@ export default function BudgetPage() {
     queryFn: () => apiFetch<Hardware[]>('/hardware', {}, token ?? undefined),
     enabled: !!token,
   });
+  const projectQuery = useProject(token, projectId);
+
+  useEffect(() => {
+    if (!projectQuery.data) {
+      return;
+    }
+    const project = projectQuery.data;
+    setProjectName(project.name);
+    const generatedItems: BudgetItem[] = [];
+
+    const materialGroups = new Map<string, { qty: number; unitCost: number }>();
+    const hardwareGroups = new Map<string, { qty: number; unitCost: number }>();
+    const parts = project.spaces.flatMap((space) =>
+      space.units.flatMap((unit) => unit.modules.flatMap((module) => module.parts)),
+    );
+
+    for (const part of parts) {
+      const partAreaM2 =
+        ((part.widthMm * part.heightMm) / 1_000_000) * Math.max(1, part.quantity);
+      if (part.material) {
+        const sheetArea =
+          ((part.material.sheetWidthMm ?? 2750) * (part.material.sheetHeightMm ?? 1830)) /
+          1_000_000;
+        const qty = Math.max(1, Math.ceil(partAreaM2 / sheetArea));
+        const key = `${part.material.name} ${part.material.thicknessMm}mm`;
+        const current = materialGroups.get(key) ?? { qty: 0, unitCost: part.material.pricePerSheet };
+        current.qty += qty;
+        materialGroups.set(key, current);
+      }
+      for (const hw of part.hardwareItems) {
+        const key = hw.hardware.name;
+        const current = hardwareGroups.get(key) ?? { qty: 0, unitCost: hw.hardware.unitCost };
+        current.qty += hw.quantity * Math.max(1, part.quantity);
+        hardwareGroups.set(key, current);
+      }
+    }
+
+    for (const [name, item] of materialGroups.entries()) {
+      generatedItems.push({
+        description: `${name} — chapas`,
+        category: 'material',
+        qty: item.qty,
+        unitCost: item.unitCost,
+      });
+    }
+    for (const [name, item] of hardwareGroups.entries()) {
+      generatedItems.push({
+        description: name,
+        category: 'hardware',
+        qty: item.qty,
+        unitCost: item.unitCost,
+      });
+    }
+    generatedItems.push({
+      description: 'Engenharia, corte, usinagem e montagem',
+      category: 'labor',
+      qty: 1,
+      unitCost: Math.max(1200, parts.length * 85),
+    });
+    generatedItems.push({
+      description: 'Instalação e logística',
+      category: 'other',
+      qty: 1,
+      unitCost: Math.max(450, project.widthMm * 0.5),
+    });
+
+    setItems(generatedItems.length > 0 ? generatedItems : INITIAL_ITEMS);
+  }, [projectQuery.data]);
 
   const totalsByCategory = useMemo(
     () =>

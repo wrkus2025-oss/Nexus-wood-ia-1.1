@@ -1,9 +1,16 @@
 'use client';
 
+import { queryKeys, useProject } from '@/lib/hooks';
+import { useAuthStore } from '@/store/auth';
 import { ContactShadows, Environment, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
-import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
+
+type ThreeWorkspaceProps = {
+  projectId?: string;
+};
 
 type CabinetProps = {
   width: number;
@@ -11,6 +18,14 @@ type CabinetProps = {
   depth: number;
   color: string;
   shelves: number;
+  doorCount: number;
+  drawerCount: number;
+  doorOpen: boolean;
+  drawerOpen: boolean;
+  explode: boolean;
+  isolateDoors: boolean;
+  showHardware: boolean;
+  showMeasurements: boolean;
 };
 
 function createWoodTexture(baseColor: string) {
@@ -22,7 +37,6 @@ function createWoodTexture(baseColor: string) {
   canvas.width = 256;
   canvas.height = 256;
   const context = canvas.getContext('2d');
-
   if (!context) {
     return null;
   }
@@ -40,22 +54,10 @@ function createWoodTexture(baseColor: string) {
     context.stroke();
   }
 
-  for (let index = 0; index < 220; index += 1) {
-    const alpha = 0.03 + (index % 4) * 0.01;
-    context.fillStyle = `rgba(255,255,255,${alpha})`;
-    context.fillRect(
-      Math.random() * canvas.width,
-      Math.random() * canvas.height,
-      1 + Math.random() * 2,
-      1 + Math.random() * 2,
-    );
-  }
-
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(2, 2);
-  texture.anisotropy = 8;
   return texture;
 }
 
@@ -64,12 +66,17 @@ function Panel({
   size,
   texture,
   color,
+  hidden = false,
 }: {
   position: [number, number, number];
   size: [number, number, number];
   texture: THREE.CanvasTexture | null;
   color: string;
+  hidden?: boolean;
 }) {
+  if (hidden) {
+    return null;
+  }
   return (
     <mesh position={position} castShadow receiveShadow>
       <boxGeometry args={size} />
@@ -78,41 +85,63 @@ function Panel({
   );
 }
 
-function Handle({ position, rotation = [0, 0, Math.PI / 2] }: { position: [number, number, number]; rotation?: [number, number, number] }) {
+function Handle({
+  position,
+  rotation = [0, 0, Math.PI / 2],
+  hidden = false,
+}: {
+  position: [number, number, number];
+  rotation?: [number, number, number];
+  hidden?: boolean;
+}) {
+  if (hidden) {
+    return null;
+  }
   return (
     <group position={position} rotation={rotation}>
       <mesh castShadow>
         <cylinderGeometry args={[0.005, 0.005, 0.12, 16]} />
         <meshStandardMaterial color="#d4d4d8" metalness={0.95} roughness={0.16} />
       </mesh>
-      <mesh position={[-0.035, 0, 0]} castShadow>
-        <cylinderGeometry args={[0.0025, 0.0025, 0.022, 12]} />
-        <meshStandardMaterial color="#f4f4f5" metalness={0.95} roughness={0.12} />
-      </mesh>
-      <mesh position={[0.035, 0, 0]} castShadow>
-        <cylinderGeometry args={[0.0025, 0.0025, 0.022, 12]} />
-        <meshStandardMaterial color="#f4f4f5" metalness={0.95} roughness={0.12} />
-      </mesh>
     </group>
   );
 }
 
-function Hinge({ position }: { position: [number, number, number] }) {
+function Hinge({
+  position,
+  hidden = false,
+}: {
+  position: [number, number, number];
+  hidden?: boolean;
+}) {
+  if (hidden) {
+    return null;
+  }
   return (
     <group position={position}>
       <mesh castShadow>
         <boxGeometry args={[0.016, 0.032, 0.004]} />
         <meshStandardMaterial color="#a1a1aa" metalness={0.8} roughness={0.22} />
       </mesh>
-      <mesh position={[0, 0, 0.004]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <cylinderGeometry args={[0.003, 0.003, 0.018, 12]} />
-        <meshStandardMaterial color="#d4d4d8" metalness={0.9} roughness={0.18} />
-      </mesh>
     </group>
   );
 }
 
-function Cabinet({ width, height, depth, color, shelves }: CabinetProps) {
+function Cabinet({
+  width,
+  height,
+  depth,
+  color,
+  shelves,
+  doorCount,
+  drawerCount,
+  doorOpen,
+  drawerOpen,
+  explode,
+  isolateDoors,
+  showHardware,
+  showMeasurements,
+}: CabinetProps) {
   const texture = useMemo(() => createWoodTexture(color), [color]);
   const panelThickness = 0.018;
   const gap = 0.003;
@@ -122,20 +151,53 @@ function Cabinet({ width, height, depth, color, shelves }: CabinetProps) {
   const innerHeight = h - panelThickness * 2;
   const innerWidth = w - panelThickness * 2;
   const shelfSpacing = shelves > 0 ? innerHeight / (shelves + 1) : innerHeight / 2;
-  const drawerModuleHeight = Math.min(0.72, h * 0.34);
-  const drawerHeight = drawerModuleHeight / 3;
-  const towerHeight = innerHeight - drawerModuleHeight;
-  const doorHeight = Math.max(0.4, towerHeight - gap * 2);
-  const doorWidth = innerWidth / 2 - gap * 1.5;
+  const drawerModuleHeight = Math.min(0.9, h * Math.min(0.48, 0.2 + drawerCount * 0.04));
+  const drawerHeight = drawerCount > 0 ? drawerModuleHeight / drawerCount : 0;
+  const towerHeight = Math.max(0.2, innerHeight - drawerModuleHeight);
+  const doorHeight = Math.max(0.3, towerHeight - gap * 2);
+  const doorWidth = Math.max(0.2, innerWidth / Math.max(1, doorCount) - gap * 1.5);
   const doorZ = d / 2 + panelThickness / 2 + gap;
+  const explodeOffset = explode ? 0.12 : 0;
+  const drawerPull = drawerOpen ? 0.18 : 0;
+  const doorAngle = doorOpen ? Math.PI / 5 : 0;
 
   return (
     <group position={[0, h / 2, 0]}>
-      <Panel position={[-(innerWidth / 2 + panelThickness / 2), 0, 0]} size={[panelThickness, h, d]} texture={texture} color={color} />
-      <Panel position={[innerWidth / 2 + panelThickness / 2, 0, 0]} size={[panelThickness, h, d]} texture={texture} color={color} />
-      <Panel position={[0, h / 2 - panelThickness / 2, 0]} size={[innerWidth, panelThickness, d]} texture={texture} color={color} />
-      <Panel position={[0, -h / 2 + panelThickness / 2, 0]} size={[innerWidth, panelThickness, d]} texture={texture} color={color} />
-      <Panel position={[0, 0, -(d / 2 - 0.004)]} size={[innerWidth, innerHeight, 0.006]} texture={null} color="#2f2f35" />
+      <Panel
+        position={[-(innerWidth / 2 + panelThickness / 2) - explodeOffset, 0, 0]}
+        size={[panelThickness, h, d]}
+        texture={texture}
+        color={color}
+        hidden={isolateDoors}
+      />
+      <Panel
+        position={[innerWidth / 2 + panelThickness / 2 + explodeOffset, 0, 0]}
+        size={[panelThickness, h, d]}
+        texture={texture}
+        color={color}
+        hidden={isolateDoors}
+      />
+      <Panel
+        position={[0, h / 2 - panelThickness / 2 + explodeOffset, 0]}
+        size={[innerWidth, panelThickness, d]}
+        texture={texture}
+        color={color}
+        hidden={isolateDoors}
+      />
+      <Panel
+        position={[0, -h / 2 + panelThickness / 2 - explodeOffset, 0]}
+        size={[innerWidth, panelThickness, d]}
+        texture={texture}
+        color={color}
+        hidden={isolateDoors}
+      />
+      <Panel
+        position={[0, 0, -(d / 2 - 0.004) - explodeOffset]}
+        size={[innerWidth, innerHeight, 0.006]}
+        texture={null}
+        color="#2f2f35"
+        hidden={isolateDoors}
+      />
 
       {Array.from({ length: shelves }).map((_, index) => {
         const positionY = -h / 2 + drawerModuleHeight + shelfSpacing * (index + 1);
@@ -146,70 +208,166 @@ function Cabinet({ width, height, depth, color, shelves }: CabinetProps) {
             size={[innerWidth - 0.004, panelThickness, d - 0.02]}
             texture={texture}
             color={color}
+            hidden={isolateDoors}
           />
         );
       })}
 
-      {Array.from({ length: 3 }).map((_, index) => {
-        const drawerFrontHeight = drawerHeight - gap;
+      {Array.from({ length: drawerCount }).map((_, index) => {
+        const drawerFrontHeight = Math.max(0.12, drawerHeight - gap);
         const drawerY = -h / 2 + panelThickness + drawerFrontHeight / 2 + index * drawerHeight;
         return (
           <group key={`drawer-${index}`}>
-            <mesh position={[0, drawerY, doorZ]} castShadow receiveShadow>
+            <mesh position={[0, drawerY, doorZ + drawerPull]} castShadow receiveShadow>
               <boxGeometry args={[innerWidth - gap * 2, drawerFrontHeight, panelThickness]} />
               <meshStandardMaterial color={color} map={texture} roughness={0.55} metalness={0.04} />
             </mesh>
-            <Handle position={[0, drawerY, doorZ + 0.018]} rotation={[0, 0, 0]} />
+            <Handle position={[0, drawerY, doorZ + 0.018 + drawerPull]} rotation={[0, 0, 0]} />
           </group>
         );
       })}
 
-      <mesh position={[-(doorWidth / 2 + gap / 2), drawerModuleHeight / 2, doorZ]} castShadow receiveShadow>
-        <boxGeometry args={[doorWidth, doorHeight, panelThickness]} />
-        <meshStandardMaterial color={color} map={texture} roughness={0.5} metalness={0.04} />
-      </mesh>
-      <mesh position={[doorWidth / 2 + gap / 2, drawerModuleHeight / 2, doorZ]} castShadow receiveShadow>
-        <boxGeometry args={[doorWidth, doorHeight, panelThickness]} />
-        <meshStandardMaterial color={color} map={texture} roughness={0.5} metalness={0.04} />
-      </mesh>
+      {Array.from({ length: doorCount }).map((_, index) => {
+        const direction = index % 2 === 0 ? -1 : 1;
+        const centerX = -innerWidth / 2 + doorWidth / 2 + index * (doorWidth + gap);
+        return (
+          <group
+            key={`door-${index}`}
+            position={[centerX + direction * explodeOffset * 0.4, drawerModuleHeight / 2, doorZ]}
+            rotation={[0, direction * doorAngle, 0]}
+          >
+            <mesh castShadow receiveShadow>
+              <boxGeometry args={[doorWidth, doorHeight, panelThickness]} />
+              <meshStandardMaterial color={color} map={texture} roughness={0.5} metalness={0.04} />
+            </mesh>
+            <Handle position={[direction * 0.04, 0, 0.018]} />
+          </group>
+        );
+      })}
 
-      <Handle position={[-gap - 0.04, drawerModuleHeight / 2, doorZ + 0.018]} />
-      <Handle position={[gap + 0.04, drawerModuleHeight / 2, doorZ + 0.018]} />
+      {showHardware &&
+        Array.from({ length: doorCount }).flatMap((_, doorIndex) =>
+          [-doorHeight / 2 + 0.16, 0, doorHeight / 2 - 0.16].map((offset, index) => (
+            <Hinge
+              key={`hinge-${doorIndex}-${index}`}
+              position={[
+                doorIndex % 2 === 0 ? -(innerWidth / 2) + 0.01 : innerWidth / 2 - 0.01,
+                drawerModuleHeight / 2 + offset,
+                doorZ - 0.004,
+              ]}
+            />
+          )),
+        )}
 
-      {[-1, 1].flatMap((direction) =>
-        [-doorHeight / 2 + 0.16, 0, doorHeight / 2 - 0.16].map((offset, index) => (
-          <Hinge
-            key={`${direction}-${index}`}
-            position={[
-              direction < 0 ? -(innerWidth / 2) + 0.01 : innerWidth / 2 - 0.01,
-              drawerModuleHeight / 2 + offset,
-              doorZ - 0.004,
-            ]}
-          />
-        )),
-      )}
+      {showMeasurements ? (
+        <group>
+          <mesh position={[0, h + 0.08, 0]}>
+            <boxGeometry args={[w, 0.01, 0.01]} />
+            <meshStandardMaterial color="#22d3ee" />
+          </mesh>
+          <mesh position={[innerWidth / 2 + 0.08, 0, 0]}>
+            <boxGeometry args={[0.01, h, 0.01]} />
+            <meshStandardMaterial color="#34d399" />
+          </mesh>
+          <mesh position={[0, 0.04, d / 2 + 0.08]}>
+            <boxGeometry args={[0.01, 0.01, d]} />
+            <meshStandardMaterial color="#f59e0b" />
+          </mesh>
+        </group>
+      ) : null}
     </group>
   );
 }
 
-export function ThreeWorkspace() {
-  const [width, setWidth] = useState(1200);
-  const [height, setHeight] = useState(2400);
-  const [depth, setDepth] = useState(620);
-  const [shelves, setShelves] = useState(3);
+export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
+  const queryClient = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  const projectQuery = useProject(token, projectId ?? '');
+  const project = projectQuery.data;
+
+  const projectParts = useMemo(
+    () =>
+      project
+        ? project.spaces.flatMap((space) =>
+            space.units.flatMap((unit) =>
+              unit.modules.flatMap((module) => module.parts),
+            ),
+          )
+        : [],
+    [project],
+  );
+
+  const detectedDoors = projectParts
+    .filter((part) => part.type === 'DOOR')
+    .reduce((sum, part) => sum + part.quantity, 0);
+  const detectedDrawers = projectParts
+    .filter((part) => part.type === 'DRAWER_FRONT')
+    .reduce((sum, part) => sum + part.quantity, 0);
+  const detectedShelves = projectParts
+    .filter((part) => part.type === 'SHELF')
+    .reduce((sum, part) => sum + part.quantity, 0);
+
+  const [width, setWidth] = useState(project?.widthMm ?? 1200);
+  const [height, setHeight] = useState(project?.heightMm ?? 2400);
+  const [depth, setDepth] = useState(project?.depthMm ?? 620);
+  const [shelves, setShelves] = useState(detectedShelves > 0 ? detectedShelves : 3);
+  const [doorCount, setDoorCount] = useState(detectedDoors > 0 ? detectedDoors : 2);
+  const [drawerCount, setDrawerCount] = useState(detectedDrawers > 0 ? detectedDrawers : 3);
   const [color, setColor] = useState('#d7c3a5');
+  const [doorOpen, setDoorOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [explode, setExplode] = useState(false);
+  const [isolateDoors, setIsolateDoors] = useState(false);
+  const [showHardware, setShowHardware] = useState(true);
+  const [showMeasurements, setShowMeasurements] = useState(true);
+
+  useEffect(() => {
+    if (!project) {
+      return;
+    }
+    setWidth(project.widthMm);
+    setHeight(project.heightMm);
+    setDepth(project.depthMm);
+    if (detectedShelves > 0) setShelves(detectedShelves);
+    if (detectedDoors > 0) setDoorCount(detectedDoors);
+    if (detectedDrawers > 0) setDrawerCount(detectedDrawers);
+  }, [
+    detectedDoors,
+    detectedDrawers,
+    detectedShelves,
+    project,
+  ]);
 
   const cameraY = height / 1000 / 2;
   const cameraZ = Math.max((height / 1000) * 1.25, (width / 1000) * 2.2);
 
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-300">
+        {project ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>Projeto ativo: {project.code} · {project.name}</span>
+            <button
+              className="rounded-lg border border-zinc-700 px-3 py-1 hover:bg-zinc-800"
+              onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.project(project.id) })}
+              type="button"
+            >
+              Atualizar dados do projeto
+            </button>
+          </div>
+        ) : (
+          <span>Modo manual: sem projeto selecionado. Use a IA para gerar e abrir o projeto automaticamente.</span>
+        )}
+      </div>
+
       <div className="grid grid-cols-2 gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:grid-cols-5">
         {[
-          { label: 'Largura (mm)', value: width, setter: setWidth, min: 600, max: 3200 },
-          { label: 'Altura (mm)', value: height, setter: setHeight, min: 1200, max: 3200 },
-          { label: 'Profundidade (mm)', value: depth, setter: setDepth, min: 300, max: 900 },
-          { label: 'Prateleiras', value: shelves, setter: setShelves, min: 0, max: 8 },
+          { label: 'Largura (mm)', value: width, setter: setWidth, min: 600, max: 4000 },
+          { label: 'Altura (mm)', value: height, setter: setHeight, min: 1200, max: 3600 },
+          { label: 'Profundidade (mm)', value: depth, setter: setDepth, min: 300, max: 1200 },
+          { label: 'Prateleiras', value: shelves, setter: setShelves, min: 0, max: 12 },
+          { label: 'Portas', value: doorCount, setter: setDoorCount, min: 0, max: 8 },
+          { label: 'Gavetas', value: drawerCount, setter: setDrawerCount, min: 0, max: 12 },
         ].map(({ label, value, setter, min, max }) => (
           <div key={label}>
             <label className="mb-1 block text-xs text-zinc-400">{label}</label>
@@ -232,6 +390,27 @@ export function ThreeWorkspace() {
             onChange={(event) => setColor(event.target.value)}
           />
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 text-sm">
+        <button className="rounded-lg border border-zinc-700 px-3 py-2 hover:bg-zinc-800" onClick={() => setDoorOpen((value) => !value)} type="button">
+          {doorOpen ? 'Fechar portas' : 'Abrir portas'}
+        </button>
+        <button className="rounded-lg border border-zinc-700 px-3 py-2 hover:bg-zinc-800" onClick={() => setDrawerOpen((value) => !value)} type="button">
+          {drawerOpen ? 'Fechar gavetas' : 'Abrir gavetas'}
+        </button>
+        <button className="rounded-lg border border-zinc-700 px-3 py-2 hover:bg-zinc-800" onClick={() => setExplode((value) => !value)} type="button">
+          {explode ? 'Modo montado' : 'Explodir móvel'}
+        </button>
+        <button className="rounded-lg border border-zinc-700 px-3 py-2 hover:bg-zinc-800" onClick={() => setIsolateDoors((value) => !value)} type="button">
+          {isolateDoors ? 'Mostrar todas as peças' : 'Isolar portas'}
+        </button>
+        <button className="rounded-lg border border-zinc-700 px-3 py-2 hover:bg-zinc-800" onClick={() => setShowHardware((value) => !value)} type="button">
+          {showHardware ? 'Ocultar ferragens' : 'Mostrar ferragens'}
+        </button>
+        <button className="rounded-lg border border-zinc-700 px-3 py-2 hover:bg-zinc-800" onClick={() => setShowMeasurements((value) => !value)} type="button">
+          {showMeasurements ? 'Ocultar cotas' : 'Mostrar cotas'}
+        </button>
       </div>
 
       <div className="h-[700px] w-full overflow-hidden rounded-2xl border border-zinc-800 bg-[radial-gradient(circle_at_top,#1f2937,transparent_45%),linear-gradient(180deg,#09090b,#111827)]">
@@ -257,24 +436,25 @@ export function ThreeWorkspace() {
             <shadowMaterial opacity={0.25} />
           </mesh>
 
-          <Cabinet width={width} height={height} depth={depth} color={color} shelves={shelves} />
+          <Cabinet
+            width={width}
+            height={height}
+            depth={depth}
+            color={color}
+            shelves={shelves}
+            doorCount={doorCount}
+            drawerCount={drawerCount}
+            doorOpen={doorOpen}
+            drawerOpen={drawerOpen}
+            explode={explode}
+            isolateDoors={isolateDoors}
+            showHardware={showHardware}
+            showMeasurements={showMeasurements}
+          />
           <ContactShadows position={[0, 0.02, 0]} opacity={0.45} scale={6} blur={2.4} far={5} />
           <OrbitControls enablePan enableRotate enableZoom minDistance={1.2} maxDistance={8} target={[0, 1.1, 0]} />
           <Environment preset="warehouse" />
         </Canvas>
-      </div>
-
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-        <h2 className="mb-2 text-sm font-medium">Recursos visuais</h2>
-        <div className="flex flex-wrap gap-4 text-sm text-zinc-300">
-          <span>Viewport ampliado</span>
-          <span>Textura MDF procedural</span>
-          <span>Folgas de porta</span>
-          <span>Frentes de gaveta</span>
-          <span>Dobradiças posicionadas</span>
-          <span>Puxadores metálicos</span>
-          <span>Iluminação e sombras realistas</span>
-        </div>
       </div>
     </div>
   );
