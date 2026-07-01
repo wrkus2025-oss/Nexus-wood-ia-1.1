@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  DESIGNER
+  PRODUCTION
+  SALES
+}
+
+enum ProjectStatus {
+  PENDING
+  PRODUCTION
+  ASSEMBLY
+  INSTALLATION
+  COMPLETED
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  name                String
+  passwordHash        String
+  role                Role      @default(DESIGNER)
+  resetToken          String?
+  resetTokenExpiresAt DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  projects            Project[]
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  customer    String
+  status      ProjectStatus @default(PENDING)
+  widthMm     Int
+  heightMm    Int
+  depthMm     Int
+  ownerId     String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  owner       User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+model Material {
+  id             String   @id @default(cuid())
+  name           String
+  manufacturer   String
+  category       String
+  thicknessMm    Int
+  color          String
+  grainDirection String
+  textureUrl     String?
+  weightKgM2     Float
+  pricePerSheet  Float
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Hardware {
+  id           String   @id @default(cuid())
+  type         String
+  name         String
+  manufacturer String
+  code         String
+  measures     String
+  catalogUrl   String?
+  manualUrl    String?
+  unitCost     Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AiHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  prompt    String
+  response  String
+  createdAt DateTime @default(now())
+}
