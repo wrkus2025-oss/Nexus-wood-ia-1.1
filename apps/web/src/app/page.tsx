@@ -14,6 +14,7 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [workspaceName, setWorkspaceName] = useState('');
   const [registerMode, setRegisterMode] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,7 +23,9 @@ export default function Home() {
     setError('');
     try {
       const path = registerMode ? '/auth/register' : '/auth/login';
-      const payload = registerMode ? { name, email, password } : { email, password };
+      const payload = registerMode
+        ? { name, email, password, workspaceName }
+        : { email, password };
       const data = await apiFetch<AuthResponse>(path, {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -42,17 +45,26 @@ export default function Home() {
         onSubmit={onSubmit}
         className="w-full max-w-md space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-8"
       >
-        <h1 className="text-2xl font-semibold">Nexus Wood AI</h1>
-        <p className="text-sm text-zinc-400">Acesse sua central profissional de marcenaria.</p>
+        <h1 className="text-2xl font-semibold">Nexus Wood AI 2.0</h1>
+        <p className="text-sm text-zinc-400">Autentique-se e carregue seu workspace ativo.</p>
 
         {registerMode && (
-          <input
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3"
-            placeholder="Nome"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
+          <>
+            <input
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3"
+              placeholder="Nome"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+            <input
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3"
+              placeholder="Nome do workspace"
+              value={workspaceName}
+              onChange={(e) => setWorkspaceName(e.target.value)}
+              required
+            />
+          </>
         )}
 
         <input
@@ -76,7 +88,7 @@ export default function Home() {
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         <button className="w-full rounded-lg bg-emerald-500 p-3 font-semibold text-zinc-950" type="submit">
-          {registerMode ? 'Criar conta' : 'Entrar'}
+          {registerMode ? 'Criar conta e workspace' : 'Entrar'}
         </button>
 
         <button

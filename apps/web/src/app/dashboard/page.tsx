@@ -1,41 +1,16 @@
 'use client';
 
 import { AppShell } from '@/components/app-shell';
-import { apiFetch } from '@/lib/api';
-import {
-  IN_PROGRESS_PROJECT_STATUSES,
-  PROJECT_STATUS_BADGE,
-  PROJECT_STATUS_LABEL,
-  ProjectStatus,
-} from '@/lib/project-status';
+import { useHardware, useMaterials, useProjects } from '@/lib/hooks';
+import { IN_PROGRESS_PROJECT_STATUSES, PROJECT_STATUS_BADGE, PROJECT_STATUS_LABEL } from '@/lib/project-status';
 import { useAuthStore } from '@/store/auth';
-import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-
-type Project = { id: string; status: ProjectStatus };
-type Material = { id: string; pricePerSheet: number };
-type Hardware = { id: string; unitCost: number };
 
 export default function DashboardPage() {
   const token = useAuthStore((s) => s.token);
-
-  const projectsQ = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => apiFetch<Project[]>('/projects', {}, token ?? undefined),
-    enabled: !!token,
-  });
-
-  const materialsQ = useQuery({
-    queryKey: ['materials'],
-    queryFn: () => apiFetch<Material[]>('/materials', {}, token ?? undefined),
-    enabled: !!token,
-  });
-
-  const hardwareQ = useQuery({
-    queryKey: ['hardware'],
-    queryFn: () => apiFetch<Hardware[]>('/hardware', {}, token ?? undefined),
-    enabled: !!token,
-  });
+  const projectsQ = useProjects(token);
+  const materialsQ = useMaterials(token);
+  const hardwareQ = useHardware(token);
 
   const projects = projectsQ.data ?? [];
   const materials = materialsQ.data ?? [];
@@ -44,21 +19,21 @@ export default function DashboardPage() {
   const inProgress = projects.filter((project) => IN_PROGRESS_PROJECT_STATUSES.includes(project.status)).length;
   const completed = projects.filter((project) => project.status === 'DELIVERED').length;
   const avgSheetCost = materials.length
-    ? (materials.reduce((s, m) => s + m.pricePerSheet, 0) / materials.length).toFixed(2)
+    ? (materials.reduce((sum, material) => sum + material.pricePerSheet, 0) / materials.length).toFixed(2)
     : '0.00';
   const avgHwCost = hardware.length
-    ? (hardware.reduce((s, h) => s + h.unitCost, 0) / hardware.length).toFixed(2)
+    ? (hardware.reduce((sum, item) => sum + item.unitCost, 0) / hardware.length).toFixed(2)
     : '0.00';
 
   const cards = [
     { title: 'Projetos em Andamento', value: String(inProgress) },
     { title: 'Projetos Concluídos', value: String(completed) },
     { title: 'Total de Projetos', value: String(projects.length) },
+    { title: 'Clientes Ativos', value: String(new Set(projects.map((project) => project.customer.id)).size) },
     { title: 'Materiais Cadastrados', value: String(materials.length) },
     { title: 'Ferragens Cadastradas', value: String(hardware.length) },
     { title: 'Custo Médio / Chapa', value: `R$ ${avgSheetCost}` },
     { title: 'Custo Médio / Ferragem', value: `R$ ${avgHwCost}` },
-    { title: 'Aproveitamento Estimado', value: '92%' },
   ];
 
   return (
@@ -83,25 +58,29 @@ export default function DashboardPage() {
       <section>
         <h2 className="mb-3 text-lg font-medium">Projetos Recentes</h2>
         {projects.length === 0 ? (
-          <p className="text-sm text-zinc-500">Nenhum projeto encontrado. Crie um em &quot;Projetos&quot;.</p>
+          <p className="text-sm text-zinc-500">Nenhum projeto encontrado.</p>
         ) : (
           <div className="overflow-hidden rounded-xl border border-zinc-800">
             <table className="w-full text-left text-sm">
               <thead className="bg-zinc-900">
                 <tr>
                   <th className="px-4 py-3">Projeto</th>
+                  <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Estrutura</th>
                 </tr>
               </thead>
               <tbody>
-                {projects.slice(0, 8).map((p) => (
-                  <tr key={p.id} className="border-t border-zinc-800">
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-400">{p.id.slice(0, 8)}…</td>
+                {projects.slice(0, 8).map((project) => (
+                  <tr key={project.id} className="border-t border-zinc-800">
+                    <td className="px-4 py-3">{project.code} · {project.name}</td>
+                    <td className="px-4 py-3">{project.customer.name}</td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PROJECT_STATUS_BADGE[p.status] ?? ''}`}>
-                        {PROJECT_STATUS_LABEL[p.status] ?? p.status}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PROJECT_STATUS_BADGE[project.status]}`}>
+                        {PROJECT_STATUS_LABEL[project.status]}
                       </span>
                     </td>
+                    <td className="px-4 py-3">{project._count?.spaces ?? 0} espaços / {project._count?.tasks ?? 0} tarefas</td>
                   </tr>
                 ))}
               </tbody>

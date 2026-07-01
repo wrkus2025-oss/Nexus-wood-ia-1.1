@@ -16,7 +16,23 @@ export class UsersService {
   }
 
   findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+    return this.prisma.user.findUnique({
+      where: { email },
+      include: { memberships: true, activeWorkspace: true },
+    });
+  }
+
+  findAuthUserById(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        memberships: {
+          include: { workspace: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        activeWorkspace: true,
+      },
+    });
   }
 
   findById(id: string) {
@@ -27,6 +43,7 @@ export class UsersService {
         email: true,
         name: true,
         role: true,
+        activeWorkspaceId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -51,6 +68,13 @@ export class UsersService {
     });
   }
 
+  setActiveWorkspace(id: string, workspaceId: string) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { activeWorkspaceId: workspaceId },
+    });
+  }
+
   listAll() {
     return this.prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
@@ -59,6 +83,7 @@ export class UsersService {
         email: true,
         name: true,
         role: true,
+        activeWorkspaceId: true,
         createdAt: true,
         updatedAt: true,
       },

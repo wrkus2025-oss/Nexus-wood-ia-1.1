@@ -7,10 +7,12 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { RolesGuard } from './guards/roles.guard';
+import { WorkspacesModule } from '../workspaces/workspaces.module';
 
 @Module({
   imports: [
     UsersModule,
+    WorkspacesModule,
     PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],

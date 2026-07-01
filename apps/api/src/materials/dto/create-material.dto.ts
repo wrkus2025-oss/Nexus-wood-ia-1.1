@@ -7,8 +7,17 @@ export class CreateMaterialDto {
   @IsString()
   manufacturer: string;
 
+  @IsOptional()
   @IsString()
-  category: string;
+  categoryName?: string;
+
+  @IsOptional()
+  @IsString()
+  group?: string;
+
+  @IsOptional()
+  @IsString()
+  sku?: string;
 
   @IsNumber()
   @Min(1)
@@ -22,7 +31,21 @@ export class CreateMaterialDto {
 
   @IsOptional()
   @IsString()
+  finish?: string;
+
+  @IsOptional()
+  @IsString()
   textureUrl?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  sheetWidthMm?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  sheetHeightMm?: number;
 
   @IsNumber()
   @Min(0)

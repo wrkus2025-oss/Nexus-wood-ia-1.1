@@ -18,6 +18,18 @@ export class CreateHardwareDto {
 
   @IsOptional()
   @IsString()
+  categoryName?: string;
+
+  @IsOptional()
+  @IsString()
+  finish?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
   catalogUrl?: string;
 
   @IsOptional()
