@@ -23,7 +23,7 @@ Plataforma profissional de marcenaria com IA — projetos paramétricos, plano d
 
 ---
 
-## Modo desenvolvimento (recomendado)
+## Como rodar localmente
 
 ### 1. Instalar dependências
 
@@ -93,7 +93,7 @@ Abra **http://localhost:3001** no navegador.
 
 ---
 
-## Modo Docker Compose (completo)
+## Como rodar com Docker
 
 ```bash
 docker compose up --build
@@ -131,6 +131,13 @@ npm run test:api
 
 ---
 
+## Login credentials
+
+- **Usuário admin**: `admin@nexuswood.com`
+- **Senha**: `nexus123`
+
+---
+
 ## Módulos disponíveis
 
 | Rota           | Descrição                                             |
@@ -138,11 +145,12 @@ npm run test:api
 | `/`            | Login / Cadastro                                      |
 | `/dashboard`   | Métricas de projetos, materiais e ferragens           |
 | `/projects`    | Gestão de projetos (criar, listar, status)            |
+| `/kanban`      | Kanban de produção com drag-and-drop por etapa        |
 | `/materials`   | Biblioteca de materiais MDF                           |
 | `/hardware`    | Biblioteca de ferragens                               |
-| `/cut-plan`    | Plano de corte com visualização de chapas             |
-| `/budget`      | Orçamento com margem de lucro configurável            |
-| `/workspace`   | Projetista 3D paramétrico (Three.js)                  |
+| `/cut-plan`    | Plano de corte com nesting guilhotina + SVG/DXF       |
+| `/budget`      | Orçamento com exportação profissional em PDF          |
+| `/workspace`   | Projetista 3D paramétrico com visual premium          |
 | `/ai`          | Assistente IA via OpenAI ou Ollama                    |
 
 ---
@@ -166,13 +174,11 @@ npm run test:api
 
 ---
 
-## Próximos módulos recomendados
+## Roadmap
 
-1. **Nesting automático** — algoritmo de otimização de corte (guilhotina ou heurística)
-2. **Orçamento PDF** — geração de proposta comercial em PDF
-3. **Kanban de produção** — quadro de etapas com drag-and-drop
-4. **Multi-tenant** — separação de contas por empresa/marcenaria
-5. **Gestão de estoque** — controle de chapas e ferragens em estoque
-6. **Integração WhatsApp** — envio de orçamentos via API
-7. **Módulos de cozinha paramétrica** — torres, balcões e aéreos configuráveis
-8. **Exportação DXF/SVG** — arquivos de corte para CNC
+1. **Multi-tenant** — separação de contas por empresa/marcenaria
+2. **Gestão de estoque** — controle de chapas, sobras e ferragens
+3. **Integração WhatsApp** — envio de orçamentos e aprovações
+4. **Módulos paramétricos avançados** — cozinhas, closets e painéis completos
+5. **Integração CNC/ERP** — filas de produção, etiquetas e apontamento fabril
+6. **Relatórios gerenciais** — margem por projeto, produtividade e perdas reais

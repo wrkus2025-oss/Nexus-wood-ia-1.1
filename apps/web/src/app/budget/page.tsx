@@ -2,209 +2,282 @@
 
 import { AppShell } from '@/components/app-shell';
 import { apiFetch } from '@/lib/api';
+import { buildQuotePdf, QuoteItem } from '@/lib/quote-pdf';
 import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 type Material = { id: string; name: string; thicknessMm: number; pricePerSheet: number };
 type Hardware = { id: string; name: string; type: string; unitCost: number };
-
-type BudgetItem = {
-  description: string;
-  category: 'material' | 'hardware' | 'service' | 'other';
-  qty: number;
-  unitCost: number;
-};
+type BudgetItem = QuoteItem;
 
 const INITIAL_ITEMS: BudgetItem[] = [
-  { description: 'MDF Branco 18mm — chapa', category: 'material', qty: 8, unitCost: 320 },
-  { description: 'MDF 6mm fundo — chapa', category: 'material', qty: 2, unitCost: 150 },
+  { description: 'MDF Branco TX 18mm — chapas', category: 'material', qty: 8, unitCost: 320 },
+  { description: 'MDF Preto 6mm — fundos', category: 'material', qty: 2, unitCost: 150 },
   { description: 'Dobradiça Blum soft-close', category: 'hardware', qty: 12, unitCost: 28.5 },
   { description: 'Corrediça telescópica 400mm', category: 'hardware', qty: 4, unitCost: 65 },
   { description: 'Puxador tubular inox', category: 'hardware', qty: 8, unitCost: 18.9 },
-  { description: 'Mão de obra montagem', category: 'service', qty: 1, unitCost: 800 },
-  { description: 'Transporte e instalação', category: 'service', qty: 1, unitCost: 300 },
+  { description: 'Corte, usinagem e montagem', category: 'labor', qty: 1, unitCost: 1200 },
+  { description: 'Instalação final', category: 'labor', qty: 1, unitCost: 450 },
 ];
 
-const CATEGORY_LABEL: Record<string, string> = {
+const CATEGORY_LABEL: Record<BudgetItem['category'], string> = {
   material: 'Material',
   hardware: 'Ferragem',
-  service: 'Serviço',
+  labor: 'Mão de obra',
   other: 'Outro',
 };
 
-const CATEGORY_COLOR: Record<string, string> = {
-  material: 'text-blue-400',
-  hardware: 'text-emerald-400',
-  service: 'text-yellow-400',
-  other: 'text-zinc-400',
+const CATEGORY_COLOR: Record<BudgetItem['category'], string> = {
+  material: 'text-sky-300',
+  hardware: 'text-emerald-300',
+  labor: 'text-amber-300',
+  other: 'text-zinc-300',
 };
 
-export default function BudgetPage() {
-  const token = useAuthStore((s) => s.token);
-  const [items, setItems] = useState<BudgetItem[]>(INITIAL_ITEMS);
-  const [margin, setMargin] = useState(30);
-  const [projectName, setProjectName] = useState('Armário de Cozinha');
+function formatCurrency(value: number) {
+  return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
-  useQuery({
+export default function BudgetPage() {
+  const token = useAuthStore((state) => state.token);
+  const [items, setItems] = useState<BudgetItem[]>(INITIAL_ITEMS);
+  const [marginPercent, setMarginPercent] = useState(32);
+  const [projectName, setProjectName] = useState('Armário de Cozinha Premium');
+  const [clientName, setClientName] = useState('Família Silva');
+  const [isExporting, setIsExporting] = useState(false);
+
+  const materialsQuery = useQuery({
     queryKey: ['materials'],
     queryFn: () => apiFetch<Material[]>('/materials', {}, token ?? undefined),
     enabled: !!token,
   });
 
-  useQuery({
+  const hardwareQuery = useQuery({
     queryKey: ['hardware'],
     queryFn: () => apiFetch<Hardware[]>('/hardware', {}, token ?? undefined),
     enabled: !!token,
   });
 
-  function update(i: number, field: keyof BudgetItem, value: string) {
-    setItems((prev) => {
-      const next = [...prev];
-      next[i] = {
-        ...next[i],
-        [field]: field === 'description' || field === 'category' ? value : Number(value),
-      };
-      return next;
-    });
+  const totalsByCategory = useMemo(
+    () =>
+      items.reduce<Record<BudgetItem['category'], number>>(
+        (accumulator, item) => {
+          accumulator[item.category] += item.qty * item.unitCost;
+          return accumulator;
+        },
+        { material: 0, hardware: 0, labor: 0, other: 0 },
+      ),
+    [items],
+  );
+
+  const subtotal = Object.values(totalsByCategory).reduce((sum, value) => sum + value, 0);
+  const marginValue = subtotal * (marginPercent / 100);
+  const finalPrice = subtotal + marginValue;
+
+  function updateItem(index: number, field: keyof BudgetItem, value: string) {
+    setItems((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]:
+                field === 'description' || field === 'category'
+                  ? value
+                  : Math.max(0, Number(value) || 0),
+            }
+          : item,
+      ),
+    );
   }
 
   function addItem() {
-    setItems((prev) => [
-      ...prev,
-      { description: 'Novo item', category: 'other', qty: 1, unitCost: 0 },
+    setItems((current) => [
+      ...current,
+      { description: 'Novo item comercial', category: 'other', qty: 1, unitCost: 0 },
     ]);
   }
 
-  function remove(i: number) {
-    setItems((prev) => prev.filter((_, idx) => idx !== i));
+  function removeItem(index: number) {
+    setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   }
 
-  const subtotal = items.reduce((s, i) => s + i.qty * i.unitCost, 0);
-  const marginValue = subtotal * (margin / 100);
-  const total = subtotal + marginValue;
-
-  const byCategory = items.reduce<Record<string, number>>((acc, item) => {
-    acc[item.category] = (acc[item.category] ?? 0) + item.qty * item.unitCost;
-    return acc;
-  }, {});
+  async function exportPdf() {
+    setIsExporting(true);
+    try {
+      const pdfBytes = await buildQuotePdf({
+        clientName,
+        projectName,
+        marginPercent,
+        items,
+      });
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `nexus-quote-${projectName.toLowerCase().replaceAll(/\s+/g, '-') || 'projeto'}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   return (
     <AppShell>
-      <h1 className="mb-6 text-2xl font-semibold">Orçamento</h1>
-
-      <div className="mb-6 flex flex-wrap items-end gap-4">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <label className="mb-1 block text-xs text-zinc-400">Nome do Projeto</label>
-          <input
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-          />
+          <h1 className="text-2xl font-semibold">Orçamento Comercial</h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            Gere proposta em PDF com branding Nexus Wood AI, composição de custos e margem final.
+          </p>
         </div>
-        <div>
-          <label className="mb-1 block text-xs text-zinc-400">Margem de lucro (%)</label>
-          <input
-            className="w-24 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm"
-            type="number"
-            min={0}
-            max={200}
-            value={margin}
-            onChange={(e) => setMargin(Number(e.target.value))}
-          />
-        </div>
+        <button
+          className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+          disabled={items.length === 0 || isExporting}
+          onClick={exportPdf}
+        >
+          {isExporting ? 'Gerando PDF...' : 'Exportar cotação em PDF'}
+        </button>
       </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {Object.entries(byCategory).map(([cat, val]) => (
-          <div key={cat} className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <p className={`text-xs font-medium ${CATEGORY_COLOR[cat]}`}>{CATEGORY_LABEL[cat] ?? cat}</p>
-            <p className="mt-1 text-lg font-semibold">
-              R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+      <div className="mb-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+          <h2 className="mb-4 font-medium">Dados da proposta</h2>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <label className="text-sm">
+              <span className="mb-1 block text-xs text-zinc-400">Cliente</span>
+              <input
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3"
+                value={clientName}
+                onChange={(event) => setClientName(event.target.value)}
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-xs text-zinc-400">Projeto</span>
+              <input
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3"
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-xs text-zinc-400">Margem de lucro (%)</span>
+              <input
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3"
+                type="number"
+                min={0}
+                max={200}
+                value={marginPercent}
+                onChange={(event) => setMarginPercent(Math.max(0, Number(event.target.value) || 0))}
+              />
+            </label>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Biblioteca de materiais</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-100">{materialsQuery.data?.length ?? 0} itens</p>
+            </div>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Biblioteca de ferragens</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-100">{hardwareQuery.data?.length ?? 0} itens</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2">
+          {[
+            ['Materiais', totalsByCategory.material, 'material'],
+            ['Ferragens', totalsByCategory.hardware, 'hardware'],
+            ['Mão de obra', totalsByCategory.labor + totalsByCategory.other, 'labor'],
+            ['Margem', marginValue, 'other'],
+            ['Subtotal', subtotal, 'other'],
+            ['Preço final', finalPrice, 'hardware'],
+          ].map(([label, value, colorKey]) => (
+            <article key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+              <p className="text-xs text-zinc-400">{label}</p>
+              <p className={`mt-2 text-xl font-semibold ${CATEGORY_COLOR[colorKey as BudgetItem['category']]}`}>
+                {typeof value === 'number' ? formatCurrency(value) : value}
+              </p>
+            </article>
+          ))}
+        </section>
+      </div>
+
+      <section className="overflow-hidden rounded-2xl border border-zinc-800">
+        <div className="flex items-center justify-between bg-zinc-900 px-4 py-3">
+          <div>
+            <h2 className="font-medium">Itens da cotação</h2>
+            <p className="text-xs text-zinc-500">
+              Materiais, ferragens e mão de obra consolidados para {projectName}.
             </p>
           </div>
-        ))}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-          <p className="text-xs font-medium text-zinc-400">Subtotal</p>
-          <p className="mt-1 text-lg font-semibold">
-            R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </p>
-        </div>
-        <div className="rounded-xl border border-emerald-700 bg-emerald-900/20 p-4">
-          <p className="text-xs font-medium text-emerald-400">Total com margem {margin}%</p>
-          <p className="mt-1 text-xl font-bold text-emerald-300">
-            R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </p>
-        </div>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-zinc-800">
-        <div className="flex items-center justify-between bg-zinc-900 px-4 py-3">
-          <h2 className="font-medium">Itens do Orçamento — {projectName}</h2>
           <button
-            className="rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-zinc-950"
+            className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-800"
             onClick={addItem}
           >
             + Item
           </button>
         </div>
+
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-900/50">
             <tr>
               <th className="px-4 py-2">Descrição</th>
               <th className="px-4 py-2">Categoria</th>
               <th className="px-4 py-2">Qtd</th>
-              <th className="px-4 py-2">Custo unit.</th>
+              <th className="px-4 py-2">Unitário</th>
               <th className="px-4 py-2">Total</th>
-              <th className="px-4 py-2"></th>
+              <th className="px-4 py-2 text-right">Ação</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item, i) => (
-              <tr key={i} className="border-t border-zinc-800">
+            {items.map((item, index) => (
+              <tr key={`${item.description}-${index}`} className="border-t border-zinc-800">
                 <td className="px-4 py-2">
                   <input
-                    className="w-full rounded bg-zinc-950 px-2 py-1"
+                    className="w-full rounded-lg bg-zinc-950 px-3 py-2"
                     value={item.description}
-                    onChange={(e) => update(i, 'description', e.target.value)}
+                    onChange={(event) => updateItem(index, 'description', event.target.value)}
                   />
                 </td>
                 <td className="px-4 py-2">
                   <select
-                    className="rounded bg-zinc-950 px-2 py-1"
+                    className="rounded-lg bg-zinc-950 px-3 py-2"
                     value={item.category}
-                    onChange={(e) => update(i, 'category', e.target.value)}
+                    onChange={(event) => updateItem(index, 'category', event.target.value)}
                   >
                     <option value="material">Material</option>
                     <option value="hardware">Ferragem</option>
-                    <option value="service">Serviço</option>
+                    <option value="labor">Mão de obra</option>
                     <option value="other">Outro</option>
                   </select>
                 </td>
                 <td className="px-4 py-2">
                   <input
-                    className="w-16 rounded bg-zinc-950 px-2 py-1"
+                    className="w-20 rounded-lg bg-zinc-950 px-3 py-2"
                     type="number"
-                    min={1}
+                    min={0}
                     value={item.qty}
-                    onChange={(e) => update(i, 'qty', e.target.value)}
+                    onChange={(event) => updateItem(index, 'qty', event.target.value)}
                   />
                 </td>
                 <td className="px-4 py-2">
                   <input
-                    className="w-24 rounded bg-zinc-950 px-2 py-1"
+                    className="w-28 rounded-lg bg-zinc-950 px-3 py-2"
                     type="number"
+                    min={0}
                     step="0.01"
                     value={item.unitCost}
-                    onChange={(e) => update(i, 'unitCost', e.target.value)}
+                    onChange={(event) => updateItem(index, 'unitCost', event.target.value)}
                   />
                 </td>
-                <td className="px-4 py-2 text-zinc-300">
-                  R$ {(item.qty * item.unitCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                <td className="px-4 py-2 font-medium text-zinc-100">
+                  {formatCurrency(item.qty * item.unitCost)}
                 </td>
-                <td className="px-4 py-2">
-                  <button className="text-red-400 hover:text-red-300" onClick={() => remove(i)}>
-                    ×
+                <td className="px-4 py-2 text-right">
+                  <button className="text-red-400 hover:text-red-300" onClick={() => removeItem(index)}>
+                    Remover
                   </button>
                 </td>
               </tr>
@@ -213,16 +286,14 @@ export default function BudgetPage() {
           <tfoot className="border-t border-zinc-700 bg-zinc-900">
             <tr>
               <td className="px-4 py-3 font-medium" colSpan={4}>
-                Total com {margin}% de margem
+                Preço final com margem de {marginPercent}%
               </td>
-              <td className="px-4 py-3 font-bold text-emerald-400">
-                R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </td>
+              <td className="px-4 py-3 text-lg font-bold text-emerald-300">{formatCurrency(finalPrice)}</td>
               <td />
             </tr>
           </tfoot>
         </table>
-      </div>
+      </section>
     </AppShell>
   );
 }

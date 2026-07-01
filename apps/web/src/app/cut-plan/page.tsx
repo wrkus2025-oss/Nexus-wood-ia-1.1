@@ -2,9 +2,11 @@
 
 import { AppShell } from '@/components/app-shell';
 import { apiFetch } from '@/lib/api';
+import { buildDxfCutPlan, buildSvgCutPlan, downloadTextFile } from '@/lib/cut-export';
+import { CutPiece, CutSettings, optimizeCutPlan } from '@/lib/cut-optimization';
 import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 type Material = {
   id: string;
@@ -14,29 +16,15 @@ type Material = {
   pricePerSheet: number;
 };
 
-type CutPiece = {
-  label: string;
-  widthMm: number;
-  heightMm: number;
-  qty: number;
+const INITIAL_SETTINGS: CutSettings = {
+  sheetWidthMm: 2750,
+  sheetHeightMm: 1830,
+  sawKerfMm: 4,
+  edgeBandingMm: 1,
+  wasteTargetPercent: 12,
 };
 
-const SHEET_W = 2750;
-const SHEET_H = 1830;
-const SAW_KERF = 4;
-
-function calcSheets(pieces: CutPiece[]): { sheets: number; waste: number; totalArea: number } {
-  let usedArea = 0;
-  for (const p of pieces) {
-    usedArea += p.widthMm * p.heightMm * p.qty;
-  }
-  const sheetArea = SHEET_W * SHEET_H;
-  const sheets = Math.ceil(usedArea / (sheetArea * 0.85));
-  const waste = Math.max(0, 100 - Math.round((usedArea / (sheets * sheetArea)) * 100));
-  return { sheets, waste, totalArea: usedArea };
-}
-
-const DEMO_PIECES: CutPiece[] = [
+const INITIAL_PIECES: CutPiece[] = [
   { label: 'Lateral', widthMm: 600, heightMm: 2300, qty: 2 },
   { label: 'Topo', widthMm: 900, heightMm: 600, qty: 1 },
   { label: 'Base', widthMm: 900, heightMm: 600, qty: 1 },
@@ -45,216 +33,346 @@ const DEMO_PIECES: CutPiece[] = [
   { label: 'Fundo', widthMm: 900, heightMm: 2300, qty: 1 },
 ];
 
-export default function CutPlanPage() {
-  const token = useAuthStore((s) => s.token);
-  const [selectedMat, setSelectedMat] = useState('');
-  const [pieces, setPieces] = useState<CutPiece[]>(DEMO_PIECES);
+const CARD_COLORS = [
+  '#38bdf8',
+  '#34d399',
+  '#f59e0b',
+  '#f472b6',
+  '#a78bfa',
+  '#fb7185',
+  '#2dd4bf',
+  '#facc15',
+];
 
-  const materialsQ = useQuery({
+export default function CutPlanPage() {
+  const token = useAuthStore((state) => state.token);
+  const [selectedMaterialId, setSelectedMaterialId] = useState('');
+  const [pieces, setPieces] = useState<CutPiece[]>(INITIAL_PIECES);
+  const [settings, setSettings] = useState<CutSettings>(INITIAL_SETTINGS);
+
+  const materialsQuery = useQuery({
     queryKey: ['materials'],
     queryFn: () => apiFetch<Material[]>('/materials', {}, token ?? undefined),
     enabled: !!token,
   });
 
-  const selectedMaterial = materialsQ.data?.find((m) => m.id === selectedMat);
-  const { sheets, waste, totalArea } = calcSheets(pieces);
-  const totalCost = selectedMaterial ? (sheets * selectedMaterial.pricePerSheet).toFixed(2) : '—';
+  const selectedMaterial = materialsQuery.data?.find((material) => material.id === selectedMaterialId);
 
-  function updatePiece(i: number, field: keyof CutPiece, value: string) {
-    setPieces((prev) => {
-      const next = [...prev];
-      next[i] = {
-        ...next[i],
-        [field]: field === 'label' ? value : Number(value),
-      };
-      return next;
-    });
+  const optimization = useMemo(() => optimizeCutPlan(pieces, settings), [pieces, settings]);
+
+  const totalMaterialCost = selectedMaterial
+    ? optimization.totalSheets * selectedMaterial.pricePerSheet
+    : 0;
+
+  const wasteAlert = optimization.wastePercent > settings.wasteTargetPercent;
+
+  function updatePiece(index: number, field: keyof CutPiece, value: string) {
+    setPieces((current) =>
+      current.map((piece, pieceIndex) =>
+        pieceIndex === index
+          ? {
+              ...piece,
+              [field]: field === 'label' ? value : Math.max(1, Number(value) || 1),
+            }
+          : piece,
+      ),
+    );
+  }
+
+  function updateSetting(field: keyof CutSettings, value: string) {
+    setSettings((current) => ({
+      ...current,
+      [field]: Math.max(0, Number(value) || 0),
+    }));
   }
 
   function addPiece() {
-    setPieces((prev) => [...prev, { label: 'Nova peça', widthMm: 600, heightMm: 400, qty: 1 }]);
+    setPieces((current) => [
+      ...current,
+      { label: `Peça ${current.length + 1}`, widthMm: 600, heightMm: 400, qty: 1 },
+    ]);
   }
 
-  function removePiece(i: number) {
-    setPieces((prev) => prev.filter((_, idx) => idx !== i));
+  function removePiece(index: number) {
+    setPieces((current) => current.filter((_, pieceIndex) => pieceIndex !== index));
   }
 
-  // Simple visual representation: scale pieces to fit canvas
-  const CANVAS_W = 550;
-  const CANVAS_H = Math.round((CANVAS_W / SHEET_W) * SHEET_H);
-  const scale = CANVAS_W / SHEET_W;
-
-  // Greedy left-to-right row packer for visual
-  type Rect = { x: number; y: number; w: number; h: number; label: string };
-  const rects: Rect[] = [];
-  let cx = 0;
-  let cy = 0;
-  let rowH = 0;
-  for (const p of pieces) {
-    for (let i = 0; i < p.qty; i++) {
-      const pw = p.widthMm + SAW_KERF;
-      const ph = p.heightMm + SAW_KERF;
-      if (cx + pw > SHEET_W) {
-        cx = 0;
-        cy += rowH;
-        rowH = 0;
-      }
-      if (cy + ph > SHEET_H) break;
-      rects.push({ x: cx, y: cy, w: p.widthMm, h: p.heightMm, label: p.label });
-      cx += pw;
-      rowH = Math.max(rowH, ph);
-    }
+  function handleExportSvg() {
+    downloadTextFile(
+      buildSvgCutPlan(optimization.layouts, settings),
+      'nexus-wood-cut-plan.svg',
+      'image/svg+xml;charset=utf-8',
+    );
   }
 
-  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
+  function handleExportDxf() {
+    downloadTextFile(
+      buildDxfCutPlan(optimization.layouts, settings),
+      'nexus-wood-cut-plan.dxf',
+      'application/dxf;charset=utf-8',
+    );
+  }
+
+  const layoutScale = 320 / Math.max(settings.sheetWidthMm, settings.sheetHeightMm);
 
   return (
     <AppShell>
-      <h1 className="mb-6 text-2xl font-semibold">Plano de Corte</h1>
-
-      <div className="mb-6 grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-          <h2 className="mb-3 font-medium">Configuração</h2>
-          <label className="mb-1 block text-xs text-zinc-400">Material (Chapa)</label>
-          <select
-            className="mb-4 w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3 text-sm"
-            value={selectedMat}
-            onChange={(e) => setSelectedMat(e.target.value)}
-          >
-            <option value="">— Selecione um material —</option>
-            {materialsQ.data?.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({m.thicknessMm}mm) — R$ {m.pricePerSheet}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-zinc-500">
-            Chapa padrão: {SHEET_W} × {SHEET_H} mm | Serra: {SAW_KERF} mm
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Plano de Corte Comercial</h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            Nesting automático com heurística guilhotina, layout 2D e exportação SVG/DXF.
           </p>
         </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { label: 'Chapas necessárias', value: String(sheets) },
-            { label: 'Desperdício estimado', value: `${waste}%` },
-            { label: 'Área total das peças', value: `${(totalArea / 1_000_000).toFixed(3)} m²` },
-            { label: 'Custo total material', value: `R$ ${totalCost}` },
-          ].map((c) => (
-            <div key={c.label} className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-              <p className="text-xs text-zinc-400">{c.label}</p>
-              <p className="mt-1 text-xl font-semibold">{c.value}</p>
-            </div>
-          ))}
+        <div className="flex flex-wrap gap-3">
+          <button
+            className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-800 disabled:opacity-50"
+            disabled={optimization.layouts.length === 0}
+            onClick={handleExportSvg}
+          >
+            Exportar SVG
+          </button>
+          <button
+            className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+            disabled={optimization.layouts.length === 0}
+            onClick={handleExportDxf}
+          >
+            Exportar DXF
+          </button>
         </div>
       </div>
 
-      <div className="mb-6 overflow-hidden rounded-xl border border-zinc-800">
+      <div className="mb-6 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+          <h2 className="mb-4 font-medium">Configuração do nesting</h2>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <label className="text-sm">
+              <span className="mb-1 block text-xs text-zinc-400">Material MDF</span>
+              <select
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3"
+                value={selectedMaterialId}
+                onChange={(event) => setSelectedMaterialId(event.target.value)}
+              >
+                <option value="">Selecione o material</option>
+                {materialsQuery.data?.map((material) => (
+                  <option key={material.id} value={material.id}>
+                    {material.name} ({material.thicknessMm}mm)
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {[
+              ['sheetWidthMm', 'Largura da chapa (mm)'],
+              ['sheetHeightMm', 'Altura da chapa (mm)'],
+              ['sawKerfMm', 'Serra / kerf (mm)'],
+              ['edgeBandingMm', 'Fita de borda (mm)'],
+              ['wasteTargetPercent', 'Meta de desperdício (%)'],
+            ].map(([field, label]) => (
+              <label key={field} className="text-sm">
+                <span className="mb-1 block text-xs text-zinc-400">{label}</span>
+                <input
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3"
+                  type="number"
+                  min={0}
+                  value={settings[field as keyof CutSettings]}
+                  onChange={(event) => updateSetting(field as keyof CutSettings, event.target.value)}
+                />
+              </label>
+            ))}
+          </div>
+          <p className="mt-4 text-xs text-zinc-500">
+            A espessura da fita de borda é considerada como folga de acabamento em cada peça.
+          </p>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2">
+          {[
+            { label: 'Total de chapas', value: String(optimization.totalSheets) },
+            { label: 'Aproveitamento geral', value: `${optimization.utilizationPercent.toFixed(1)}%` },
+            {
+              label: 'Desperdício',
+              value: `${optimization.wastePercent.toFixed(1)}%`,
+              tone: wasteAlert ? 'text-amber-300' : 'text-emerald-300',
+            },
+            {
+              label: 'Custo de material',
+              value: selectedMaterial ? `R$ ${totalMaterialCost.toFixed(2)}` : 'Selecione um MDF',
+            },
+            {
+              label: 'Área líquida das peças',
+              value: `${(optimization.totalAreaMm2 / 1_000_000).toFixed(3)} m²`,
+            },
+            {
+              label: 'Área com folgas de corte',
+              value: `${(optimization.totalCutAreaMm2 / 1_000_000).toFixed(3)} m²`,
+            },
+          ].map((card) => (
+            <article key={card.label} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+              <p className="text-xs text-zinc-400">{card.label}</p>
+              <p className={`mt-2 text-xl font-semibold ${card.tone ?? ''}`}>{card.value}</p>
+            </article>
+          ))}
+        </section>
+      </div>
+
+      <section className="mb-6 overflow-hidden rounded-2xl border border-zinc-800">
         <div className="flex items-center justify-between bg-zinc-900 px-4 py-3">
-          <h2 className="font-medium">Lista de Peças</h2>
+          <h2 className="font-medium">Peças do projeto</h2>
           <button
-            className="rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-zinc-950"
+            className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-950"
             onClick={addPiece}
           >
             + Peça
           </button>
         </div>
+
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-900/50">
             <tr>
               <th className="px-4 py-2">Peça</th>
-              <th className="px-4 py-2">Larg (mm)</th>
-              <th className="px-4 py-2">Alt (mm)</th>
+              <th className="px-4 py-2">Largura</th>
+              <th className="px-4 py-2">Altura</th>
               <th className="px-4 py-2">Qtd</th>
               <th className="px-4 py-2">Área</th>
-              <th className="px-4 py-2"></th>
+              <th className="px-4 py-2 text-right">Ação</th>
             </tr>
           </thead>
           <tbody>
-            {pieces.map((p, i) => (
-              <tr key={i} className="border-t border-zinc-800">
+            {pieces.map((piece, index) => (
+              <tr key={`${piece.label}-${index}`} className="border-t border-zinc-800">
                 <td className="px-4 py-2">
                   <input
-                    className="w-full rounded bg-zinc-950 px-2 py-1"
-                    value={p.label}
-                    onChange={(e) => updatePiece(i, 'label', e.target.value)}
+                    className="w-full rounded-lg bg-zinc-950 px-3 py-2"
+                    value={piece.label}
+                    onChange={(event) => updatePiece(index, 'label', event.target.value)}
                   />
                 </td>
                 <td className="px-4 py-2">
                   <input
-                    className="w-20 rounded bg-zinc-950 px-2 py-1"
-                    type="number"
-                    value={p.widthMm}
-                    onChange={(e) => updatePiece(i, 'widthMm', e.target.value)}
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    className="w-20 rounded bg-zinc-950 px-2 py-1"
-                    type="number"
-                    value={p.heightMm}
-                    onChange={(e) => updatePiece(i, 'heightMm', e.target.value)}
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    className="w-16 rounded bg-zinc-950 px-2 py-1"
+                    className="w-28 rounded-lg bg-zinc-950 px-3 py-2"
                     type="number"
                     min={1}
-                    value={p.qty}
-                    onChange={(e) => updatePiece(i, 'qty', e.target.value)}
+                    value={piece.widthMm}
+                    onChange={(event) => updatePiece(index, 'widthMm', event.target.value)}
+                  />
+                </td>
+                <td className="px-4 py-2">
+                  <input
+                    className="w-28 rounded-lg bg-zinc-950 px-3 py-2"
+                    type="number"
+                    min={1}
+                    value={piece.heightMm}
+                    onChange={(event) => updatePiece(index, 'heightMm', event.target.value)}
+                  />
+                </td>
+                <td className="px-4 py-2">
+                  <input
+                    className="w-20 rounded-lg bg-zinc-950 px-3 py-2"
+                    type="number"
+                    min={1}
+                    value={piece.qty}
+                    onChange={(event) => updatePiece(index, 'qty', event.target.value)}
                   />
                 </td>
                 <td className="px-4 py-2 text-zinc-400">
-                  {((p.widthMm * p.heightMm * p.qty) / 1_000_000).toFixed(3)} m²
+                  {((piece.widthMm * piece.heightMm * piece.qty) / 1_000_000).toFixed(3)} m²
                 </td>
-                <td className="px-4 py-2">
-                  <button
-                    className="text-red-400 hover:text-red-300"
-                    onClick={() => removePiece(i)}
-                  >
-                    ×
+                <td className="px-4 py-2 text-right">
+                  <button className="text-red-400 hover:text-red-300" onClick={() => removePiece(index)}>
+                    Remover
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </section>
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
-        <h2 className="mb-3 font-medium">Visualização — Chapa 1 de {sheets}</h2>
-        <div
-          className="relative overflow-hidden rounded-lg border border-zinc-700"
-          style={{ width: CANVAS_W, height: CANVAS_H, background: '#1a1a1a' }}
-        >
-          {rects.map((r, i) => {
-            const uniqueColors = [...new Set(pieces.map((p) => p.label))];
-            const ci = uniqueColors.indexOf(r.label) % colors.length;
-            return (
+      <section className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-medium">Layout 2D das chapas</h2>
+            <p className="mt-1 text-sm text-zinc-400">
+              Visualização comercial do nesting com identificação e dimensão de cada peça.
+            </p>
+          </div>
+          {wasteAlert ? (
+            <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-300">
+              Desperdício acima da meta
+            </span>
+          ) : (
+            <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-300">
+              Meta de desperdício atendida
+            </span>
+          )}
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          {optimization.layouts.map((sheet) => (
+            <article key={sheet.index} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium">Chapa {sheet.index + 1}</h3>
+                  <p className="text-xs text-zinc-500">
+                    Aproveitamento {sheet.utilizationPercent.toFixed(1)}% • Desperdício{' '}
+                    {sheet.wastePercent.toFixed(1)}%
+                  </p>
+                </div>
+                <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300">
+                  {sheet.placements.length} peças
+                </span>
+              </div>
+
               <div
-                key={i}
-                className="absolute flex items-center justify-center overflow-hidden rounded-sm border border-zinc-900 text-center"
+                className="relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900"
                 style={{
-                  left: r.x * scale,
-                  top: r.y * scale,
-                  width: r.w * scale,
-                  height: r.h * scale,
-                  background: colors[ci] + '55',
-                  borderColor: colors[ci],
-                  fontSize: Math.min(r.w, r.h) * scale * 0.15,
-                  color: colors[ci],
-                  lineHeight: 1.2,
+                  width: settings.sheetWidthMm * layoutScale,
+                  height: settings.sheetHeightMm * layoutScale,
+                  maxWidth: '100%',
                 }}
               >
-                <span className="px-0.5">{r.label}</span>
+                {sheet.placements.map((placement, index) => {
+                  const color = CARD_COLORS[index % CARD_COLORS.length];
+                  const left = placement.xMm * layoutScale;
+                  const top = placement.yMm * layoutScale;
+                  const width = placement.widthMm * layoutScale;
+                  const height = placement.heightMm * layoutScale;
+                  const fontSize = Math.max(10, Math.min(14, Math.min(width, height) * 0.18));
+
+                  return (
+                    <div
+                      key={placement.id}
+                      className="absolute flex flex-col items-center justify-center overflow-hidden rounded-md border text-center"
+                      style={{
+                        left,
+                        top,
+                        width,
+                        height,
+                        background: `${color}55`,
+                        borderColor: color,
+                        color,
+                        fontSize,
+                      }}
+                    >
+                      <span className="px-1 font-semibold">{placement.label}</span>
+                      <span className="px-1 text-[10px] text-zinc-100">
+                        {placement.widthMm} × {placement.heightMm} mm
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </article>
+          ))}
         </div>
-        <p className="mt-2 text-xs text-zinc-500">
-          Disposição automática para visualização. Otimização real recomenda software de nesting dedicado.
-        </p>
-      </div>
+
+        {optimization.unplaced.length > 0 ? (
+          <p className="mt-4 text-sm text-red-300">
+            Peças não alocadas: {optimization.unplaced.join(', ')}. Revise o tamanho da chapa ou as dimensões.
+          </p>
+        ) : null}
+      </section>
     </AppShell>
   );
 }

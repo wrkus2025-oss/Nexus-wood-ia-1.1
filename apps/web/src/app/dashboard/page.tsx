@@ -2,11 +2,17 @@
 
 import { AppShell } from '@/components/app-shell';
 import { apiFetch } from '@/lib/api';
+import {
+  IN_PROGRESS_PROJECT_STATUSES,
+  PROJECT_STATUS_BADGE,
+  PROJECT_STATUS_LABEL,
+  ProjectStatus,
+} from '@/lib/project-status';
 import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 
-type Project = { id: string; status: string };
+type Project = { id: string; status: ProjectStatus };
 type Material = { id: string; pricePerSheet: number };
 type Hardware = { id: string; unitCost: number };
 
@@ -35,8 +41,8 @@ export default function DashboardPage() {
   const materials = materialsQ.data ?? [];
   const hardware = hardwareQ.data ?? [];
 
-  const inProgress = projects.filter((p) => ['PENDING', 'PRODUCTION', 'ASSEMBLY'].includes(p.status)).length;
-  const completed = projects.filter((p) => p.status === 'COMPLETED').length;
+  const inProgress = projects.filter((project) => IN_PROGRESS_PROJECT_STATUSES.includes(project.status)).length;
+  const completed = projects.filter((project) => project.status === 'DELIVERED').length;
   const avgSheetCost = materials.length
     ? (materials.reduce((s, m) => s + m.pricePerSheet, 0) / materials.length).toFixed(2)
     : '0.00';
@@ -54,22 +60,6 @@ export default function DashboardPage() {
     { title: 'Custo Médio / Ferragem', value: `R$ ${avgHwCost}` },
     { title: 'Aproveitamento Estimado', value: '92%' },
   ];
-
-  const statusBadge: Record<string, string> = {
-    PENDING: 'bg-yellow-500/20 text-yellow-300',
-    PRODUCTION: 'bg-blue-500/20 text-blue-300',
-    ASSEMBLY: 'bg-purple-500/20 text-purple-300',
-    INSTALLATION: 'bg-orange-500/20 text-orange-300',
-    COMPLETED: 'bg-emerald-500/20 text-emerald-300',
-  };
-
-  const statusLabel: Record<string, string> = {
-    PENDING: 'Pendente',
-    PRODUCTION: 'Produção',
-    ASSEMBLY: 'Montagem',
-    INSTALLATION: 'Instalação',
-    COMPLETED: 'Concluído',
-  };
 
   return (
     <AppShell>
@@ -108,8 +98,8 @@ export default function DashboardPage() {
                   <tr key={p.id} className="border-t border-zinc-800">
                     <td className="px-4 py-3 font-mono text-xs text-zinc-400">{p.id.slice(0, 8)}…</td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge[p.status] ?? ''}`}>
-                        {statusLabel[p.status] ?? p.status}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PROJECT_STATUS_BADGE[p.status] ?? ''}`}>
+                        {PROJECT_STATUS_LABEL[p.status] ?? p.status}
                       </span>
                     </td>
                   </tr>

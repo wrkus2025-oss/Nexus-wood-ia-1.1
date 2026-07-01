@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 const links = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/projects', label: 'Projetos' },
+  { href: '/kanban', label: 'Kanban' },
   { href: '/materials', label: 'Materiais' },
   { href: '/hardware', label: 'Ferragens' },
   { href: '/cut-plan', label: 'Plano de Corte' },

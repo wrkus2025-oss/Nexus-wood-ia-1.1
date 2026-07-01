@@ -14,11 +14,12 @@ enum Role {
 }
 
 enum ProjectStatus {
-  PENDING
-  PRODUCTION
+  DRAFT
+  APPROVED
+  CUTTING
+  EDGE_BANDING
   ASSEMBLY
-  INSTALLATION
-  COMPLETED
+  DELIVERED
 }
 
 model User {
@@ -39,7 +40,7 @@ model Project {
   name        String
   description String?
   customer    String
-  status      ProjectStatus @default(PENDING)
+  status      ProjectStatus @default(DRAFT)
   widthMm     Int
   heightMm    Int
   depthMm     Int

@@ -217,7 +217,7 @@ async function main() {
       description:
         'Cozinha completa em L com torre quente, balcão e paneleiro. MDF Branco TX 18mm com puxadores tubulares inox.',
       customer: 'João Silva',
-      status: 'PRODUCTION',
+      status: 'CUTTING',
       widthMm: 4200,
       heightMm: 2700,
       depthMm: 600,

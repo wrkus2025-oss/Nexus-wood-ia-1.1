@@ -2,6 +2,7 @@
 
 import { AppShell } from '@/components/app-shell';
 import { apiFetch } from '@/lib/api';
+import { PROJECT_STATUS_BADGE, PROJECT_STATUS_LABEL, ProjectStatus } from '@/lib/project-status';
 import { useAuthStore } from '@/store/auth';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useState } from 'react';
@@ -10,7 +11,7 @@ type Project = {
   id: string;
   name: string;
   customer: string;
-  status: string;
+  status: ProjectStatus;
   widthMm: number;
   heightMm: number;
   depthMm: number;
@@ -81,7 +82,11 @@ export default function ProjectsPage() {
               <tr key={project.id} className="border-t border-zinc-800">
                 <td className="px-4 py-3">{project.name}</td>
                 <td className="px-4 py-3">{project.customer}</td>
-                <td className="px-4 py-3">{project.status}</td>
+                <td className="px-4 py-3">
+                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${PROJECT_STATUS_BADGE[project.status]}`}>
+                    {PROJECT_STATUS_LABEL[project.status]}
+                  </span>
+                </td>
                 <td className="px-4 py-3">{project.widthMm} x {project.heightMm} x {project.depthMm} mm</td>
               </tr>
             ))}
