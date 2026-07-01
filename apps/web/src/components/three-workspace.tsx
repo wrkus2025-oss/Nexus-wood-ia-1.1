@@ -14,6 +14,10 @@ type CabinetProps = {
 };
 
 function createWoodTexture(baseColor: string) {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 256;
@@ -100,8 +104,8 @@ function Hinge({ position }: { position: [number, number, number] }) {
         <boxGeometry args={[0.016, 0.032, 0.004]} />
         <meshStandardMaterial color="#a1a1aa" metalness={0.8} roughness={0.22} />
       </mesh>
-      <mesh position={[0, 0, 0.004]} castShadow>
-        <cylinderGeometry args={[0.003, 0.003, 0.018, 12]} rotation={[Math.PI / 2, 0, 0]} />
+      <mesh position={[0, 0, 0.004]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <cylinderGeometry args={[0.003, 0.003, 0.018, 12]} />
         <meshStandardMaterial color="#d4d4d8" metalness={0.9} roughness={0.18} />
       </mesh>
     </group>

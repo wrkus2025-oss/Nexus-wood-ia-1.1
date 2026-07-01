@@ -21,13 +21,6 @@ const INITIAL_ITEMS: BudgetItem[] = [
   { description: 'Instalação final', category: 'labor', qty: 1, unitCost: 450 },
 ];
 
-const CATEGORY_LABEL: Record<BudgetItem['category'], string> = {
-  material: 'Material',
-  hardware: 'Ferragem',
-  labor: 'Mão de obra',
-  other: 'Outro',
-};
-
 const CATEGORY_COLOR: Record<BudgetItem['category'], string> = {
   material: 'text-sky-300',
   hardware: 'text-emerald-300',
@@ -111,7 +104,8 @@ export default function BudgetPage() {
         marginPercent,
         items,
       });
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const pdfBuffer = Uint8Array.from(pdfBytes).buffer;
+      const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
