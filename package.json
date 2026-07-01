@@ -1,0 +1,20 @@
+{
+  "name": "nexus-wood-ia-1.1",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "start": "docker compose up --build",
+    "start:detached": "docker compose up --build -d",
+    "stop": "docker compose down --remove-orphans",
+    "dev:web": "npm run dev --workspace web",
+    "dev:api": "npm run start:dev --workspace api",
+    "build:web": "npm run build --workspace web",
+    "build:api": "npm run build --workspace api",
+    "lint:web": "npm run lint --workspace web",
+    "lint:api": "npm run lint --workspace api",
+    "test:api": "npm run test --workspace api"
+  }
+}

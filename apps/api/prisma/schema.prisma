@@ -1,0 +1,470 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  DESIGNER
+  PRODUCTION
+  SALES
+}
+
+enum ProjectStatus {
+  DRAFT
+  APPROVED
+  CUTTING
+  EDGE_BANDING
+  ASSEMBLY
+  DELIVERED
+}
+
+enum PartType {
+  PANEL
+  SHELF
+  DOOR
+  DRAWER_FRONT
+  BACK_PANEL
+  PARTITION
+  OTHER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum AttachmentKind {
+  DOCUMENT
+  IMAGE
+  MODEL
+  OTHER
+}
+
+enum AuditEventType {
+  PROJECT_CREATED
+  PROJECT_UPDATED
+  STATUS_CHANGED
+  SPACE_CREATED
+  UNIT_CREATED
+  MODULE_CREATED
+  PART_CREATED
+  TASK_CREATED
+  TASK_UPDATED
+  NOTE_CREATED
+  ATTACHMENT_CREATED
+  MEMBER_ADDED
+  MEMBER_UPDATED
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  name                String
+  passwordHash        String
+  role                Role                 @default(DESIGNER)
+  activeWorkspaceId   String?
+  resetToken          String?
+  resetTokenExpiresAt DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  memberships         WorkspaceMember[]
+  ownedProjects       Project[]            @relation("OwnedProjects")
+  aiHistory           AiHistory[]
+  stageChanges        ProjectStageHistory[] @relation("StageChangedBy")
+  assignedTasks       ProductionTask[]     @relation("AssignedTasks")
+  createdTasks        ProductionTask[]     @relation("CreatedTasks")
+  createdAttachments  Attachment[]         @relation("CreatedAttachments")
+  createdNotes        ProjectNote[]        @relation("CreatedNotes")
+  auditEvents         AuditEvent[]         @relation("AuditActor")
+  activeWorkspace     Workspace?           @relation("ActiveWorkspace", fields: [activeWorkspaceId], references: [id], onDelete: SetNull)
+}
+
+model Workspace {
+  id              String             @id @default(cuid())
+  name            String
+  slug            String             @unique
+  description     String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  members         WorkspaceMember[]
+  activeUsers     User[]             @relation("ActiveWorkspace")
+  customers       Customer[]
+  projects        Project[]
+  materialCategories MaterialCategory[]
+  materials       Material[]
+  hardwareCategories HardwareCategory[]
+  hardware        Hardware[]
+  aiHistory       AiHistory[]
+  workflowStages  WorkflowStage[]
+  stageHistory    ProjectStageHistory[]
+  productionTasks ProductionTask[]
+  attachments     Attachment[]
+  notes           ProjectNote[]
+  auditEvents     AuditEvent[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        Role      @default(DESIGNER)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+model Customer {
+  id             String            @id @default(cuid())
+  workspaceId    String
+  name           String
+  companyName    String?
+  documentNumber String?
+  email          String?
+  phone          String?
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  workspace      Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contacts       CustomerContact[]
+  addresses      Address[]
+  projects       Project[]
+
+  @@unique([workspaceId, name])
+}
+
+model CustomerContact {
+  id         String   @id @default(cuid())
+  customerId String
+  name       String
+  email      String?
+  phone      String?
+  role       String?
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  customerId String
+  label      String?
+  street1    String
+  street2    String?
+  city       String
+  state      String
+  postalCode String
+  country    String   @default("BR")
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id          String               @id @default(cuid())
+  workspaceId String
+  customerId  String
+  ownerId     String
+  name        String
+  code        String
+  description String?
+  status      ProjectStatus        @default(DRAFT)
+  widthMm     Int
+  heightMm    Int
+  depthMm     Int
+  dueDate     DateTime?
+  notes       String?
+  quotedValue Float?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  customer    Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  owner       User                 @relation("OwnedProjects", fields: [ownerId], references: [id], onDelete: Cascade)
+  spaces      ProjectSpace[]
+  history     ProjectStageHistory[]
+  tasks       ProductionTask[]
+  attachments Attachment[]
+  projectNotes ProjectNote[]
+  auditEvents AuditEvent[]
+  aiHistory   AiHistory[]
+
+  @@unique([workspaceId, code])
+}
+
+model ProjectSpace {
+  id        String        @id @default(cuid())
+  projectId  String
+  name      String
+  code      String
+  notes     String?
+  widthMm   Int?
+  heightMm  Int?
+  depthMm   Int?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  units     ProjectUnit[]
+
+  @@unique([projectId, code])
+}
+
+model ProjectUnit {
+  id        String       @id @default(cuid())
+  spaceId    String
+  name      String
+  code      String
+  widthMm   Int
+  heightMm  Int
+  depthMm   Int
+  notes     String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  space     ProjectSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  modules   UnitModule[]
+
+  @@unique([spaceId, code])
+}
+
+model UnitModule {
+  id        String      @id @default(cuid())
+  unitId     String
+  name      String
+  code      String
+  notes     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  unit       ProjectUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  parts     Part[]
+
+  @@unique([unitId, code])
+}
+
+model Part {
+  id              String         @id @default(cuid())
+  moduleId         String
+  materialId       String?
+  name            String
+  code            String
+  type            PartType       @default(PANEL)
+  widthMm         Int
+  heightMm        Int
+  thicknessMm     Int
+  quantity        Int            @default(1)
+  edgeBandTop     String?
+  edgeBandRight   String?
+  edgeBandBottom  String?
+  edgeBandLeft    String?
+  finish          String?
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  module          UnitModule     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  material        Material?      @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  hardwareItems   PartHardware[]
+
+  @@unique([moduleId, code])
+}
+
+model PartHardware {
+  id         String   @id @default(cuid())
+  partId      String
+  hardwareId  String
+  quantity   Int      @default(1)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  part       Part     @relation(fields: [partId], references: [id], onDelete: Cascade)
+  hardware   Hardware @relation(fields: [hardwareId], references: [id], onDelete: Restrict)
+
+  @@unique([partId, hardwareId])
+}
+
+model MaterialCategory {
+  id          String     @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  materials   Material[]
+
+  @@unique([workspaceId, name])
+}
+
+model Material {
+  id             String           @id @default(cuid())
+  workspaceId    String
+  categoryId     String?
+  name           String
+  manufacturer   String
+  group          String?
+  sku            String?
+  color          String
+  grainDirection String
+  finish         String?
+  textureUrl     String?
+  thicknessMm    Int
+  sheetWidthMm   Int?
+  sheetHeightMm  Int?
+  weightKgM2     Float
+  pricePerSheet  Float
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category       MaterialCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  parts          Part[]
+
+  @@unique([workspaceId, name, manufacturer, thicknessMm])
+}
+
+model HardwareCategory {
+  id          String     @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  hardware    Hardware[]
+
+  @@unique([workspaceId, name])
+}
+
+model Hardware {
+  id           String            @id @default(cuid())
+  workspaceId  String
+  categoryId   String?
+  type         String
+  name         String
+  manufacturer String
+  code         String
+  measures     String
+  finish       String?
+  description  String?
+  catalogUrl   String?
+  manualUrl    String?
+  unitCost     Float
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category     HardwareCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  partItems    PartHardware[]
+
+  @@unique([workspaceId, code])
+}
+
+model WorkflowStage {
+  id          String              @id @default(cuid())
+  workspaceId String
+  key         String
+  label       String
+  orderIndex  Int
+  color       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  historyEntries ProjectStageHistory[]
+
+  @@unique([workspaceId, key])
+  @@unique([workspaceId, orderIndex])
+}
+
+model ProjectStageHistory {
+  id          String         @id @default(cuid())
+  projectId   String
+  workspaceId String
+  changedById String
+  stageId     String?
+  status      ProjectStatus
+  note        String?
+  createdAt   DateTime       @default(now())
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  changedBy   User           @relation("StageChangedBy", fields: [changedById], references: [id], onDelete: Cascade)
+  stage       WorkflowStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+}
+
+model ProductionTask {
+  id           String     @id @default(cuid())
+  projectId     String
+  workspaceId   String
+  title        String
+  description  String?
+  status       TaskStatus @default(TODO)
+  dueDate      DateTime?
+  assignedToId String?
+  createdById  String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedTo   User?      @relation("AssignedTasks", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy    User       @relation("CreatedTasks", fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+model Attachment {
+  id          String         @id @default(cuid())
+  projectId   String
+  workspaceId String
+  name        String
+  kind        AttachmentKind @default(DOCUMENT)
+  url         String
+  mimeType    String?
+  sizeBytes   Int?
+  createdById String
+  createdAt   DateTime       @default(now())
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User           @relation("CreatedAttachments", fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+model ProjectNote {
+  id          String    @id @default(cuid())
+  projectId   String
+  workspaceId String
+  body        String
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation("CreatedNotes", fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+model AuditEvent {
+  id          String         @id @default(cuid())
+  workspaceId String
+  projectId   String?
+  actorId     String?
+  eventType   AuditEventType
+  entityType  String
+  entityId    String
+  details     Json?
+  createdAt   DateTime       @default(now())
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor       User?          @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+}
+
+model AiHistory {
+  id          String    @id @default(cuid())
+  userId      String
+  workspaceId String
+  projectId   String?
+  prompt      String
+  response    String
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
