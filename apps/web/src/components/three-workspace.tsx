@@ -2,10 +2,17 @@
 
 import { queryKeys, useProject } from '@/lib/hooks';
 import { useAuthStore } from '@/store/auth';
-import { ContactShadows, Environment, OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import {
+  ContactShadows,
+  Environment,
+  OrbitControls,
+  PerspectiveCamera,
+  TransformControls,
+} from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
 import { useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 
 type ThreeWorkspaceProps = {
@@ -284,6 +291,7 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
   const token = useAuthStore((s) => s.token);
   const projectQuery = useProject(token, projectId ?? '');
   const project = projectQuery.data;
+  const orbitRef = useRef<OrbitControlsImpl | null>(null);
 
   const projectParts = useMemo(
     () =>
@@ -307,12 +315,12 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
     .filter((part) => part.type === 'SHELF')
     .reduce((sum, part) => sum + part.quantity, 0);
 
-  const [width, setWidth] = useState(project?.widthMm ?? 1200);
-  const [height, setHeight] = useState(project?.heightMm ?? 2400);
-  const [depth, setDepth] = useState(project?.depthMm ?? 620);
-  const [shelves, setShelves] = useState(detectedShelves > 0 ? detectedShelves : 3);
-  const [doorCount, setDoorCount] = useState(detectedDoors > 0 ? detectedDoors : 2);
-  const [drawerCount, setDrawerCount] = useState(detectedDrawers > 0 ? detectedDrawers : 3);
+  const [width, setWidth] = useState(1200);
+  const [height, setHeight] = useState(2400);
+  const [depth, setDepth] = useState(620);
+  const [shelves, setShelves] = useState(3);
+  const [doorCount, setDoorCount] = useState(2);
+  const [drawerCount, setDrawerCount] = useState(3);
   const [color, setColor] = useState('#d7c3a5');
   const [doorOpen, setDoorOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -320,12 +328,32 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
   const [isolateDoors, setIsolateDoors] = useState(false);
   const [showHardware, setShowHardware] = useState(true);
   const [showMeasurements, setShowMeasurements] = useState(true);
-  const effectiveWidth = project?.widthMm ?? width;
-  const effectiveHeight = project?.heightMm ?? height;
-  const effectiveDepth = project?.depthMm ?? depth;
-  const effectiveShelves = project ? Math.max(1, detectedShelves || 3) : shelves;
-  const effectiveDoors = project ? Math.max(1, detectedDoors || 2) : doorCount;
-  const effectiveDrawers = project ? Math.max(0, detectedDrawers || 0) : drawerCount;
+  const [transformMode, setTransformMode] = useState<'translate' | 'rotate' | 'scale'>('translate');
+  const [furnitureX, setFurnitureX] = useState(0);
+  const [furnitureZ, setFurnitureZ] = useState(0);
+  const [furnitureRotationY, setFurnitureRotationY] = useState(0);
+  const [scaleX, setScaleX] = useState(1);
+  const [scaleY, setScaleY] = useState(1);
+  const [scaleZ, setScaleZ] = useState(1);
+
+  useEffect(() => {
+    if (!project) {
+      return;
+    }
+    setWidth(project.widthMm);
+    setHeight(project.heightMm);
+    setDepth(project.depthMm);
+    setShelves(Math.max(1, detectedShelves || 3));
+    setDoorCount(Math.max(1, detectedDoors || 2));
+    setDrawerCount(Math.max(0, detectedDrawers || 0));
+  }, [project, detectedDoors, detectedDrawers, detectedShelves]);
+
+  const effectiveWidth = Math.max(300, Math.round(width * scaleX));
+  const effectiveHeight = Math.max(500, Math.round(height * scaleY));
+  const effectiveDepth = Math.max(200, Math.round(depth * scaleZ));
+  const effectiveShelves = Math.max(0, shelves);
+  const effectiveDoors = Math.max(0, doorCount);
+  const effectiveDrawers = Math.max(0, drawerCount);
   const cameraY = effectiveHeight / 1000 / 2;
   const cameraZ = Math.max((effectiveHeight / 1000) * 1.25, (effectiveWidth / 1000) * 2.2);
 
@@ -350,13 +378,13 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
 
       <div className="grid grid-cols-2 gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:grid-cols-5">
         {[
-          { label: 'Largura (mm)', setter: setWidth, min: 600, max: 4000 },
-          { label: 'Altura (mm)', setter: setHeight, min: 1200, max: 3600 },
-          { label: 'Profundidade (mm)', setter: setDepth, min: 300, max: 1200 },
-          { label: 'Prateleiras', setter: setShelves, min: 0, max: 12 },
-          { label: 'Portas', setter: setDoorCount, min: 0, max: 8 },
-          { label: 'Gavetas', setter: setDrawerCount, min: 0, max: 12 },
-        ].map(({ label, setter, min, max }) => (
+          { label: 'Largura (mm)', value: width, setter: setWidth, min: 600, max: 6000 },
+          { label: 'Altura (mm)', value: height, setter: setHeight, min: 900, max: 4200 },
+          { label: 'Profundidade (mm)', value: depth, setter: setDepth, min: 300, max: 1600 },
+          { label: 'Prateleiras', value: shelves, setter: setShelves, min: 0, max: 16 },
+          { label: 'Portas', value: doorCount, setter: setDoorCount, min: 0, max: 12 },
+          { label: 'Gavetas', value: drawerCount, setter: setDrawerCount, min: 0, max: 14 },
+        ].map(({ label, setter, min, max, value }) => (
           <div key={label}>
             <label className="mb-1 block text-xs text-zinc-400">{label}</label>
             <input
@@ -364,20 +392,7 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
               type="number"
               min={min}
               max={max}
-              value={
-                label === 'Largura (mm)'
-                  ? effectiveWidth
-                  : label === 'Altura (mm)'
-                    ? effectiveHeight
-                    : label === 'Profundidade (mm)'
-                      ? effectiveDepth
-                      : label === 'Prateleiras'
-                        ? effectiveShelves
-                        : label === 'Portas'
-                          ? effectiveDoors
-                          : effectiveDrawers
-              }
-              disabled={!!project}
+              value={value}
               onChange={(event) => setter(Number(event.target.value))}
             />
           </div>
@@ -391,6 +406,50 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
             onChange={(event) => setColor(event.target.value)}
           />
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:grid-cols-4">
+        <div>
+          <label className="mb-1 block text-xs text-zinc-400">Posição X (m)</label>
+          <input className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-2 text-sm" type="number" step="0.1" value={furnitureX} onChange={(event) => setFurnitureX(Number(event.target.value))} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-zinc-400">Posição Z (m)</label>
+          <input className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-2 text-sm" type="number" step="0.1" value={furnitureZ} onChange={(event) => setFurnitureZ(Number(event.target.value))} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-zinc-400">Rotação Y (°)</label>
+          <input className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-2 text-sm" type="number" step="1" value={furnitureRotationY} onChange={(event) => setFurnitureRotationY(Number(event.target.value))} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-zinc-400">Modo de interação</label>
+          <select className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-2 text-sm" value={transformMode} onChange={(event) => setTransformMode(event.target.value as 'translate' | 'rotate' | 'scale')}>
+            <option value="translate">Arrastar</option>
+            <option value="rotate">Rotacionar</option>
+            <option value="scale">Redimensionar</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-sm">
+        {[
+          { label: 'Escala X', value: scaleX, setter: setScaleX },
+          { label: 'Escala Y', value: scaleY, setter: setScaleY },
+          { label: 'Escala Z', value: scaleZ, setter: setScaleZ },
+        ].map(({ label, value, setter }) => (
+          <div key={label}>
+            <label className="mb-1 block text-xs text-zinc-400">{label}</label>
+            <input
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 p-2"
+              type="number"
+              step="0.05"
+              min={0.4}
+              max={2.4}
+              value={value}
+              onChange={(event) => setter(Math.max(0.4, Math.min(2.4, Number(event.target.value) || 1)))}
+            />
+          </div>
+        ))}
       </div>
 
       <div className="flex flex-wrap gap-2 text-sm">
@@ -412,6 +471,10 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
         <button className="rounded-lg border border-zinc-700 px-3 py-2 hover:bg-zinc-800" onClick={() => setShowMeasurements((value) => !value)} type="button">
           {showMeasurements ? 'Ocultar cotas' : 'Mostrar cotas'}
         </button>
+      </div>
+
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3 text-xs text-zinc-400">
+        Interações profissionais ativas: arrastar, rotacionar, redimensionar e regeneração ao vivo por edição de dimensões.
       </div>
 
       <div className="h-[700px] w-full overflow-hidden rounded-2xl border border-zinc-800 bg-[radial-gradient(circle_at_top,#1f2937,transparent_45%),linear-gradient(180deg,#09090b,#111827)]">
@@ -437,23 +500,38 @@ export function ThreeWorkspace({ projectId }: ThreeWorkspaceProps) {
             <shadowMaterial opacity={0.25} />
           </mesh>
 
-          <Cabinet
-            width={effectiveWidth}
-            height={effectiveHeight}
-            depth={effectiveDepth}
-            color={color}
-            shelves={effectiveShelves}
-            doorCount={effectiveDoors}
-            drawerCount={effectiveDrawers}
-            doorOpen={doorOpen}
-            drawerOpen={drawerOpen}
-            explode={explode}
-            isolateDoors={isolateDoors}
-            showHardware={showHardware}
-            showMeasurements={showMeasurements}
-          />
+          <TransformControls
+            mode={transformMode}
+            onDraggingChanged={(dragging) => {
+              if (orbitRef.current) {
+                orbitRef.current.enabled = !dragging;
+              }
+            }}
+          >
+            <group
+              position={[furnitureX, 0, furnitureZ]}
+              rotation={[0, (furnitureRotationY * Math.PI) / 180, 0]}
+            >
+              <Cabinet
+                width={effectiveWidth}
+                height={effectiveHeight}
+                depth={effectiveDepth}
+                color={color}
+                shelves={effectiveShelves}
+                doorCount={effectiveDoors}
+                drawerCount={effectiveDrawers}
+                doorOpen={doorOpen}
+                drawerOpen={drawerOpen}
+                explode={explode}
+                isolateDoors={isolateDoors}
+                showHardware={showHardware}
+                showMeasurements={showMeasurements}
+              />
+            </group>
+          </TransformControls>
+
           <ContactShadows position={[0, 0.02, 0]} opacity={0.45} scale={6} blur={2.4} far={5} />
-          <OrbitControls enablePan enableRotate enableZoom minDistance={1.2} maxDistance={8} target={[0, 1.1, 0]} />
+          <OrbitControls ref={orbitRef} enablePan enableRotate enableZoom minDistance={1.2} maxDistance={8} target={[0, 1.1, 0]} />
           <Environment preset="warehouse" />
         </Canvas>
       </div>
