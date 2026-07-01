@@ -6,6 +6,9 @@
     "apps/*"
   ],
   "scripts": {
+    "start": "docker compose up --build",
+    "start:detached": "docker compose up --build -d",
+    "stop": "docker compose down --remove-orphans",
     "dev:web": "npm run dev --workspace web",
     "dev:api": "npm run start:dev --workspace api",
     "build:web": "npm run build --workspace web",

@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN DATABASE_URL="******localhost:5432/nexus_wood" npx prisma generate
+RUN DATABASE_URL="postgresql://postgres:postgres@localhost:5432/nexus_wood?schema=public" npx prisma generate
 RUN npm run build
 
 FROM node:20-alpine AS runner
