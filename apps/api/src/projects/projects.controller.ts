@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ProjectStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -16,7 +26,10 @@ export class ProjectsController {
   }
 
   @Post()
-  create(@Req() req: { user: { userId: string } }, @Body() dto: CreateProjectDto) {
+  create(
+    @Req() req: { user: { userId: string } },
+    @Body() dto: CreateProjectDto,
+  ) {
     return this.projectsService.create(req.user.userId, dto);
   }
 

@@ -9,6 +9,8 @@ const links = [
   { href: '/projects', label: 'Projetos' },
   { href: '/materials', label: 'Materiais' },
   { href: '/hardware', label: 'Ferragens' },
+  { href: '/cut-plan', label: 'Plano de Corte' },
+  { href: '/budget', label: 'Orçamento' },
   { href: '/workspace', label: 'Projetista 3D' },
   { href: '/ai', label: 'IA Nexus Master' },
 ];

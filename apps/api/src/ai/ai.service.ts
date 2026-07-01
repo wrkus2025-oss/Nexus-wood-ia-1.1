@@ -16,22 +16,32 @@ export class AiService {
     let responseText = '';
 
     if (openAiKey) {
-      const model = this.configService.get<string>('OPENAI_MODEL', 'gpt-4o-mini');
+      const model = this.configService.get<string>(
+        'OPENAI_MODEL',
+        'gpt-4o-mini',
+      );
       const authHeader = ['Bearer', openAiKey].join(' ');
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: authHeader,
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: authHeader,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Você é o assistente Nexus Master para marcenaria profissional.',
+              },
+              { role: 'user', content: prompt },
+            ],
+          }),
         },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: 'Você é o assistente Nexus Master para marcenaria profissional.' },
-            { role: 'user', content: prompt },
-          ],
-        }),
-      });
+      );
 
       if (!response.ok) {
         throw new BadRequestException('OpenAI request failed');
@@ -56,10 +66,14 @@ export class AiService {
         throw new BadRequestException('Ollama request failed');
       }
 
-      const payload = (await response.json()) as { message?: { content?: string } };
+      const payload = (await response.json()) as {
+        message?: { content?: string };
+      };
       responseText = payload.message?.content ?? '';
     } else {
-      throw new BadRequestException('Configure OPENAI_API_KEY or OLLAMA_URL to use AI assistant');
+      throw new BadRequestException(
+        'Configure OPENAI_API_KEY or OLLAMA_URL to use AI assistant',
+      );
     }
 
     await this.prisma.aiHistory.create({

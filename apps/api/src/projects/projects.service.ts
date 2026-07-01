@@ -20,7 +20,9 @@ export class ProjectsService {
   }
 
   async update(id: string, ownerId: string, dto: UpdateProjectDto) {
-    const project = await this.prisma.project.findFirst({ where: { id, ownerId } });
+    const project = await this.prisma.project.findFirst({
+      where: { id, ownerId },
+    });
     if (!project) {
       throw new NotFoundException('Project not found');
     }
@@ -28,7 +30,9 @@ export class ProjectsService {
   }
 
   async remove(id: string, ownerId: string) {
-    const project = await this.prisma.project.findFirst({ where: { id, ownerId } });
+    const project = await this.prisma.project.findFirst({
+      where: { id, ownerId },
+    });
     if (!project) {
       throw new NotFoundException('Project not found');
     }
@@ -36,7 +40,9 @@ export class ProjectsService {
   }
 
   async updateStatus(id: string, ownerId: string, status: ProjectStatus) {
-    const project = await this.prisma.project.findFirst({ where: { id, ownerId } });
+    const project = await this.prisma.project.findFirst({
+      where: { id, ownerId },
+    });
     if (!project) {
       throw new NotFoundException('Project not found');
     }

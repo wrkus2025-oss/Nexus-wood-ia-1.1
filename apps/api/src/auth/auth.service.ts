@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -54,14 +59,22 @@ export class AuthService {
     }
 
     const token = crypto.randomBytes(24).toString('hex');
-    await this.usersService.setResetToken(user.id, token, new Date(Date.now() + 1000 * 60 * 30));
+    await this.usersService.setResetToken(
+      user.id,
+      token,
+      new Date(Date.now() + 1000 * 60 * 30),
+    );
 
     return { success: true, resetToken: token };
   }
 
   async resetPassword(dto: ResetPasswordDto) {
     const user = await this.usersService.findByResetToken(dto.token);
-    if (!user || !user.resetTokenExpiresAt || user.resetTokenExpiresAt < new Date()) {
+    if (
+      !user ||
+      !user.resetTokenExpiresAt ||
+      user.resetTokenExpiresAt < new Date()
+    ) {
       throw new BadRequestException('Invalid or expired token');
     }
 
